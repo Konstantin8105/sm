@@ -14,7 +14,14 @@ symbolic math on Go
   
   // example 3:
   parse("y*(12+y-2)","variable(y)") // result will be `y*10-y*y`
+
+  // prototype of rules:
+  rule("function + constant", swap)
+  rule("constant * constant", sum)
+  rule("mod(any,constant)", modExplode)
 ```
+
+
 
 prototype:
 ```golang
