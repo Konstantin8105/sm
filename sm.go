@@ -76,6 +76,12 @@ func walk(a goast.Expr) (changed bool, r goast.Expr) {
 	case *goast.ParenExpr:
 		changed, r = walk(v.X)
 		return
+
+	case *goast.BasicLit:
+		// ignore
+
+	default:
+		panic(fmt.Errorf("Add implementation for type %T", a))
 	}
 
 	return false, a
