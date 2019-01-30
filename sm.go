@@ -67,6 +67,7 @@ func init() {
 		openParenSingleNumber, // 6
 		openParenSingleIdent,  // 7
 		sortIdentMul,          // 8
+		functionPow,           // 9
 	}
 }
 
@@ -85,7 +86,6 @@ func walk(a goast.Expr, variables []string) (c bool, _ goast.Expr) {
 	// fmt.Println(counter, "walk:before: ", buf.String())
 	// counter++
 	// defer func() {
-	// debug
 	// var buf bytes.Buffer
 	// printer.Fprint(&buf, token.NewFileSet(), a)
 	// counter--
@@ -106,6 +106,7 @@ func walk(a goast.Expr, variables []string) (c bool, _ goast.Expr) {
 				changed = true
 				i = 0
 			}
+			// view(a)
 		}
 		if changed {
 			return changed, a
@@ -126,13 +127,29 @@ func walk(a goast.Expr, variables []string) (c bool, _ goast.Expr) {
 		return walk(v.X, variables)
 
 	case *goast.BasicLit:
-		// ignore
 		if v.Kind == token.INT {
 			return true, createFloat(v.Value)
 		}
 
-	case *goast.Ident:
-		// ignore
+	case *goast.Ident: // ignore
+
+	case *goast.CallExpr:
+		var call goast.CallExpr
+		call.Fun = v.Fun
+		var changed bool
+		for i := range v.Args {
+			fmt.Println(i)
+			c, e := walk(v.Args[i], variables)
+			if c {
+				changed = true
+				call.Args = append(call.Args, e)
+				continue
+			}
+			call.Args = append(call.Args, v.Args[i])
+		}
+		if changed {
+			return true, &call
+		}
 
 	default:
 		panic(fmt.Errorf("Add implementation for type %T", a))
@@ -140,6 +157,111 @@ func walk(a goast.Expr, variables []string) (c bool, _ goast.Expr) {
 
 	// all is not changed
 	return false, a
+}
+
+func functionPow(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+	call, ok := a.(*goast.CallExpr)
+	if !ok {
+		return false, nil
+	}
+	id, ok := call.Fun.(*goast.Ident)
+	if !ok {
+		return false, nil
+	}
+	if id.Name != "pow" {
+		return false, nil
+	}
+	fmt.Println("2")
+	if len(call.Args) != 2 {
+		panic("function pow have not 2 arguments")
+	}
+
+	fmt.Println("22")
+	e, ok := call.Args[1].(*goast.BasicLit)
+	if !ok {
+		return false, nil
+	}
+
+	fmt.Println("3")
+	exponent, err := strconv.ParseFloat(e.Value, 64)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("4", exponent, exponent == float64(int64(exponent)))
+	if exponent != float64(int64(exponent)) {
+		return false, nil
+	}
+
+	exn := int64(exponent)
+
+	switch exn {
+	case 0:
+		// from:
+		// pow(..., 0)
+		// to:
+		// 1
+		return true, createFloat("1")
+
+	case 1:
+		// from:
+		// pow(..., 1)
+		// to:
+		// (...)
+		return true, &goast.ParenExpr{X: call.Args[0]}
+
+	case 2:
+		// from:
+		// pow(..., 2)
+		// to:
+		// (...) * (...)
+		x1 := call.Args[0]
+		x2 := call.Args[0]
+		g := &goast.BinaryExpr{
+			X:  &goast.ParenExpr{X: x1},
+			Op: token.MUL,
+			Y:  &goast.ParenExpr{X: x2},
+		}
+		return true, g
+	}
+
+	if exn > 0 {
+		// from:
+		// pow(..., 33)
+		// to:
+		// (...) * pow(..., 32)
+		x1 := call.Args[0]
+		x2 := call.Args[0]
+		return true, &goast.BinaryExpr{
+			X:  &goast.ParenExpr{X: x1},
+			Op: token.MUL,
+			Y: &goast.CallExpr{
+				Fun: goast.NewIdent("pow"),
+				Args: []goast.Expr{
+					x2,
+					createFloat(fmt.Sprintf("%d", exn-1)),
+				},
+			},
+		}
+	}
+
+	// from:
+	// pow(..., -33)
+	// to:
+	// pow(..., -32) / (...)
+	x1 := call.Args[0]
+	x2 := call.Args[0]
+	return true, &goast.BinaryExpr{
+		X: &goast.CallExpr{
+			Fun: goast.NewIdent("pow"),
+			Args: []goast.Expr{
+				x1,
+				createFloat(fmt.Sprintf("%d", exn-1)),
+			},
+		},
+		Op: token.QUO,
+		Y:  &goast.ParenExpr{X: x2},
+	}
 }
 
 func openParenSingleIdent(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
@@ -326,8 +448,10 @@ func openParenLeft(a goast.Expr, variables []string) (changed bool, r goast.Expr
 	}
 
 	var found bool
-	if _, ok := v.X.(*goast.ParenExpr); ok {
-		found = true
+	if par, ok := v.X.(*goast.ParenExpr); ok {
+		if _, ok := par.X.(*goast.BinaryExpr); ok {
+			found = true
+		}
 	} else {
 		if _, ok := v.X.(*goast.BinaryExpr); ok {
 			found = true
@@ -464,7 +588,7 @@ func constants(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
 func createFloat(value string) *goast.BasicLit {
 	val, err := strconv.ParseFloat(value, 64)
 	if err != nil {
-		panic(val)
+		panic(err)
 	}
 	return &goast.BasicLit{
 		Kind:  token.FLOAT,
