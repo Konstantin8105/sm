@@ -109,15 +109,14 @@ func walk(a goast.Expr, variables []string) (c bool, _ goast.Expr) {
 	{
 		var changed bool
 		var r goast.Expr
+	begin:
 		for i := 0; i < len(rules); i++ {
 			// fmt.Println("try rules = ", i)
-			var c bool
-			c, r = rules[i](a, variables)
-			if c {
+			if c, r = rules[i](a, variables); c {
 				// fmt.Println("rules = ", i)
 				a = r
 				changed = true
-				i = 0
+				goto begin
 			}
 			// view(a)
 		}
