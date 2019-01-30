@@ -78,6 +78,10 @@ func Test(t *testing.T) {
 			out:  "a * (a * a)",
 		},
 		{
+			expr: "pow(a+1,2)",
+			out:  "1.000 + a + (a + a*a)",
+		},
+		{
 			expr: "pow(a+b,5-4)",
 			out:  "a + b",
 		},
