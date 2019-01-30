@@ -84,6 +84,7 @@ func Test(t *testing.T) {
 			if a != tcs[i].out {
 				t.Fatalf("Is not same '%s' != '%s'", a, tcs[i].out)
 			}
+			t.Log(a)
 		})
 	}
 }
