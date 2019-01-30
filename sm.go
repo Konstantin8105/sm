@@ -126,11 +126,15 @@ func walk(a goast.Expr, variables []string) (c bool, _ goast.Expr) {
 	switch v := a.(type) {
 	case *goast.BinaryExpr:
 		cX, rX := walk(v.X, variables)
+		if cX {
+			v.X = rX
+			return true, v
+		}
 		cY, rY := walk(v.Y, variables)
-		changed := cX || cY
-		v.X = rX
-		v.Y = rY
-		return changed, v
+		if cY {
+			v.Y = rY
+			return true, v
+		}
 
 	case *goast.ParenExpr:
 		return walk(v.X, variables)
@@ -159,7 +163,6 @@ func walk(a goast.Expr, variables []string) (c bool, _ goast.Expr) {
 		call.Fun = v.Fun
 		var changed bool
 		for i := range v.Args {
-			fmt.Println(i)
 			c, e := walk(v.Args[i], variables)
 			if c {
 				changed = true
@@ -246,34 +249,12 @@ func functionPow(a goast.Expr, variables []string) (changed bool, r goast.Expr) 
 
 	exn := int64(exponent)
 
-	switch exn {
-	case 0:
+	if exn == 0 {
 		// from:
 		// pow(..., 0)
 		// to:
 		// 1
 		return true, createFloat("1")
-
-	case 1:
-		// from:
-		// pow(..., 1)
-		// to:
-		// (...)
-		return true, &goast.ParenExpr{X: call.Args[0]}
-
-	case 2:
-		// from:
-		// pow(..., 2)
-		// to:
-		// (...) * (...)
-		x1 := call.Args[0]
-		x2 := call.Args[0]
-		g := &goast.BinaryExpr{
-			X:  &goast.ParenExpr{X: x1},
-			Op: token.MUL,
-			Y:  &goast.ParenExpr{X: x2},
-		}
-		return true, g
 	}
 
 	if exn > 0 {
@@ -347,7 +328,7 @@ func openParenSingleNumber(a goast.Expr, variables []string) (changed bool, r go
 	// (number)
 	// to:
 	// number
-	num, ok := par.X.(*goast.BinaryExpr)
+	num, ok := par.X.(*goast.BasicLit)
 	if !ok {
 		return false, nil
 	}
