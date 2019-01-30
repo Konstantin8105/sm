@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 
 	goast "go/ast"
 )
@@ -59,12 +60,20 @@ func init() {
 	rules = []func(goast.Expr, []string) (bool, goast.Expr){
 		constants,             // 0
 		constantsLeft,         // 1
-		openParenLeft,         // 2
-		openParenRight,        // 3
-		openParen,             // 4
-		openParenSingleNumber, // 5
-		openParenSingleIdent,  // 6
+		constantsLeftLeft,     // 2
+		openParenLeft,         // 3
+		openParenRight,        // 4
+		openParen,             // 5
+		openParenSingleNumber, // 6
+		openParenSingleIdent,  // 7
+		sortIdentMul,          // 8
 	}
+}
+
+func view(a goast.Expr) {
+	var buf bytes.Buffer
+	printer.Fprint(&buf, token.NewFileSet(), a)
+	fmt.Println(buf.String())
 }
 
 var counter int
@@ -99,7 +108,7 @@ func walk(a goast.Expr, variables []string) (c bool, _ goast.Expr) {
 					// debug
 					var buf bytes.Buffer
 					printer.Fprint(&buf, token.NewFileSet(), a)
-					fmt.Println(counter, "walk:before: ", buf.String())
+					fmt.Println(counter, "rule result: ", buf.String())
 				}
 				i = 0
 			}
@@ -361,6 +370,73 @@ func constantsLeft(a goast.Expr, variables []string) (changed bool, r goast.Expr
 	// swap
 	v.X, v.Y = v.Y, v.X
 	return true, v
+}
+
+func constantsLeftLeft(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+	v, ok := a.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil
+	}
+	if v.Op != token.MUL {
+		return false, nil
+	}
+	bin, ok := v.Y.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil
+	}
+	if bin.Op != token.MUL {
+		return false, nil
+	}
+
+	con, _ := isConstant(bin.X)
+	if !con {
+		return false, nil
+	}
+
+	// from:
+	// any1 * ( constants * any2)
+	// to:
+	// constants * (any1 * any2)
+	return true, &goast.BinaryExpr{
+		X:  bin.X,
+		Op: token.MUL,
+		Y: &goast.BinaryExpr{
+			X:  v.X,
+			Op: token.MUL,
+			Y:  bin.Y,
+		},
+	}
+}
+
+func sortIdentMul(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+	v, ok := a.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil
+	}
+	if v.Op != token.MUL {
+		return false, nil
+	}
+	x, ok := v.X.(*goast.Ident)
+	if !ok {
+		return false, nil
+	}
+	y, ok := v.Y.(*goast.Ident)
+	if !ok {
+		return false, nil
+	}
+	if strings.Compare(x.Name, y.Name) <= 0 {
+		return false, nil
+	}
+
+	// from :
+	// (b*a)
+	// to :
+	// (a*b)
+	return true, &goast.BinaryExpr{
+		X:  y,
+		Op: token.MUL,
+		Y:  x,
+	}
 }
 
 func constants(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
