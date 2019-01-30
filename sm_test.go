@@ -1,6 +1,7 @@
 package sm_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/Konstantin8105/sm"
@@ -35,7 +36,7 @@ func Test(t *testing.T) {
 			out:  "10.000 * a",
 		}, {
 			expr: "(2+8*a)*a",
-			out:  "2.000 * a + 8.000 * a * a",
+			out:  "2.000*a + 8.000*a*a",
 		}, {
 			expr: "b*(2+8*a)*a",
 			out:  "2.000 * a * b + 8.000 * a * a * b",
@@ -43,7 +44,7 @@ func Test(t *testing.T) {
 	}
 
 	for i := range tcs {
-		t.Run(tcs[i].expr, func(t *testing.T) {
+		t.Run(fmt.Sprintf("%d:%s", i, tcs[i].expr), func(t *testing.T) {
 			a, err := sm.Sexpr(nil, tcs[i].expr, tcs[i].variables...)
 			if err != nil {
 				t.Fatal(err)
