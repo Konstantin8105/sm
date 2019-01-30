@@ -107,6 +107,10 @@ func Test(t *testing.T) {
 			// formatting error
 			out: "pow(2.000, 0.062)",
 		},
+		{
+			expr: "pow(9,9)*4*(-3+3)*0+12.3*0-wer*0-0*wed",
+			out:  "0.000",
+		},
 	}
 
 	for i := range tcs {

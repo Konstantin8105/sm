@@ -74,7 +74,7 @@ func init() {
 		binaryNumber,          // 11
 		parenParen,            // 12
 		binaryUnary,           // 13
-		// zeroValue,             // 14
+		zeroValueMul,          // 14
 	}
 }
 
@@ -672,6 +672,31 @@ func openParenLeft(a goast.Expr, variables []string) (changed bool, r goast.Expr
 
 	v.X, v.Y = v.Y, v.X
 	return openParenRight(v, variables)
+}
+
+func zeroValueMul(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+	v, ok := a.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil
+	}
+	if v.Op != token.MUL {
+		return false, nil
+	}
+
+	// constants * any
+	xOk, x := isConstant(v.X)
+	yOk, _ := isConstant(v.Y)
+	if !(xOk && !yOk) {
+		return false, nil
+	}
+	if x != float64(int64(x)) {
+		return false, nil
+	}
+	if int64(x) != 0 {
+		return false, nil
+	}
+
+	return true, createFloat("0")
 }
 
 func constantsLeft(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
