@@ -111,6 +111,42 @@ func Test(t *testing.T) {
 			expr: "pow(9,9)*4*(-3+3)*0+12.3*0-wer*0-0*wed",
 			out:  "0.000",
 		},
+		{
+			expr: "d(pow(x,a),x)",
+			out:  "a*pow(x,a - 1)",
+		},
+		{
+			expr: "b*d(a*x,x)",
+			out:  "a * b",
+		},
+		{
+			expr: "b*d(a*x,a*x);constant(a);variable(x);",
+			out:  "b",
+		},
+		{
+			expr: "a*d(a,x)",
+			out:  "0.000",
+		},
+		{
+			expr: "d(2*pow(x,a),x)",
+			out:  "2.000*a*pow(x,a - 1)",
+		},
+		{
+			expr: "d(pow(x,a+1),x)",
+			out:  "(a+1)*pow(x,a)",
+		},
+		{
+			expr: "d(u*v,x);function(u,x);function(v,x)",
+			out:  "d(u,x)*v + u*d(v,x)",
+		},
+		{
+			expr: "d(u/v,x);function(u,x);function(v,x)",
+			out:  "(d(u,x)*v - u*d(v,x)) / (v * v)",
+		},
+		{
+			expr: "d((2*(3*x-4))/(pow(x,2)+1),x)",
+			out:  "2*(-3*x*x+8*x+3)/((x*x+1)*(x*x+1))",
+		},
 	}
 
 	for i := range tcs {

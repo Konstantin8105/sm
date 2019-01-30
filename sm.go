@@ -75,6 +75,7 @@ func init() {
 		parenParen,            // 12
 		binaryUnary,           // 13
 		zeroValueMul,          // 14
+		differential,          // 15
 	}
 }
 
@@ -114,11 +115,11 @@ func walk(a goast.Expr, variables []string) (c bool, _ goast.Expr) {
 			// fmt.Println("try rules = ", i)
 			if c, r = rules[i](a, variables); c {
 				// fmt.Println("rules = ", i)
+				view(a)
 				a = r
 				changed = true
 				goto begin
 			}
-			// view(a)
 		}
 		if changed {
 			return changed, a
@@ -386,6 +387,25 @@ func oneMul(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
 	// to:
 	// any
 	return true, bin.Y
+}
+
+func differential(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+	call, ok := a.(*goast.CallExpr)
+	if !ok {
+		return false, nil
+	}
+	id, ok := call.Fun.(*goast.Ident)
+	if !ok {
+		return false, nil
+	}
+	if id.Name != "d" {
+		return false, nil
+	}
+	if len(call.Args) != 2 {
+		panic("function pow have not 2 arguments")
+	}
+
+	return false, nil
 }
 
 func functionPow(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
