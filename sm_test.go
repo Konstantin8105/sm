@@ -85,6 +85,10 @@ func Test(t *testing.T) {
 			expr: "pow(a+b,4/2)",
 			out:  "a*a + a*b + (a*b + b*b)",
 		},
+		{
+			expr: "pow(2,pow(4,-2))",
+			out:  "a*a + a*b + (a*b + b*b)",
+		},
 	}
 
 	for i := range tcs {
