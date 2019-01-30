@@ -115,7 +115,15 @@ func Test(t *testing.T) {
 			out:  "a*pow(x,a - 1)",
 		},
 		{
-			expr: "b*d(a*x,x);constant(a);variable(x);",
+			expr: "d(pow(x,2),x);variable(x);",
+			out:  "a * x",
+		},
+		{
+			expr: "d(pow(x,3),x);variable(x);",
+			out:  "a * (x * x)",
+		},
+		{
+			expr: "b*d(a*x,x);constant(a);constant(b);variable(x);",
 			out:  "a * b",
 		},
 		{

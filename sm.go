@@ -23,12 +23,36 @@ type sm struct {
 	vars []string
 	funs []function
 	iter int64
-	err  error
 }
 
 func (s sm) errorGen(e error) error {
 	var et errors.Tree
 	et.Name = "Error of symbolic math"
+	_ = et.Add(fmt.Errorf("Expression: %s", s.base))
+	{
+		var ei errors.Tree
+		ei.Name = "Constants:"
+		for i := range s.cons {
+			_ = ei.Add(fmt.Errorf("%s", s.cons[i]))
+		}
+		_ = et.Add(ei)
+	}
+	{
+		var ei errors.Tree
+		ei.Name = "Variables:"
+		for i := range s.vars {
+			_ = ei.Add(fmt.Errorf("%s", s.vars[i]))
+		}
+		_ = et.Add(ei)
+	}
+	{
+		var ei errors.Tree
+		ei.Name = "Functions:"
+		for i := range s.funs {
+			_ = ei.Add(fmt.Errorf("%s %v", s.funs[i].name, s.funs[i].variables))
+		}
+		_ = et.Add(ei)
+	}
 	_ = et.Add(fmt.Errorf("Iteration : %d", s.iter))
 	_ = et.Add(fmt.Errorf("Error     : %v", e))
 	return et
@@ -64,11 +88,62 @@ func Sexpr(out io.Writer, expr string) (re string, err error) {
 		if err != nil {
 			return "", s.errorGen(err)
 		}
-		goast.Print(token.NewFileSet(), a)
+		if call, ok := a.(*goast.CallExpr); ok {
+			funIdent, ok := call.Fun.(*goast.Ident)
+			if !ok {
+				return "", s.errorGen(fmt.Errorf("not good function name: %s", lines[i]))
+			}
+			// function name
+			switch funIdent.Name {
+			case "function":
+				if len(call.Args) < 2 {
+					return "", s.errorGen(fmt.Errorf("function have minimal 2 arguments - name of function and depend variable"))
+				}
+				var f function
+				// name of function
+				if id, ok := call.Args[0].(*goast.Ident); ok {
+					f.name = id.Name
+				} else {
+					return "", s.errorGen(fmt.Errorf("not valid name of function"))
+				}
+				// depend variables
+				for i := 1; i < len(call.Args); i++ {
+					if id, ok := call.Args[i].(*goast.Ident); ok {
+						f.variables = append(f.variables, id.Name)
+						s.vars = append(s.vars, id.Name)
+					} else {
+						return "", s.errorGen(fmt.Errorf("not valid name of variable"))
+					}
+				}
+				s.funs = append(s.funs, f)
+				continue
+			case "constant":
+				if len(call.Args) != 1 {
+					return "", s.errorGen(fmt.Errorf("constants have only one argument - name of constant"))
+				}
+				if id, ok := call.Args[0].(*goast.Ident); ok {
+					s.cons = append(s.cons, id.Name)
+				} else {
+					return "", s.errorGen(fmt.Errorf("not valid name of constant"))
+				}
+				continue
+			case "variable":
+				if len(call.Args) != 1 {
+					return "", s.errorGen(fmt.Errorf("variables have only one argument - name of variable"))
+				}
+				if id, ok := call.Args[0].(*goast.Ident); ok {
+					s.vars = append(s.vars, id.Name)
+				} else {
+					return "", s.errorGen(fmt.Errorf("not valid name of variable"))
+				}
+				continue
+			}
+		}
+		s.base = lines[i]
 	}
 
 	var a goast.Expr
-	a, err = parser.ParseExpr(expr)
+	a, err = parser.ParseExpr(s.base)
 	if err != nil {
 		return
 	}
