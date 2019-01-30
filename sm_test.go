@@ -86,8 +86,18 @@ func Test(t *testing.T) {
 			out:  "a*a + a*b + (a*b + b*b)",
 		},
 		{
+			expr: "pow(2,pow(1,-1))",
+			out:  "2.000",
+		},
+		{
+			expr: "pow(1,pow(4,1))",
+			out:  "1.000",
+		},
+		{
 			expr: "pow(2,pow(4,-2))",
-			out:  "a*a + a*b + (a*b + b*b)",
+			// true value is 0.0625
+			// formatting error
+			out: "pow(2.000, 0.062)",
 		},
 	}
 

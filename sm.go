@@ -558,6 +558,11 @@ func constantsLeftLeft(a goast.Expr, variables []string) (changed bool, r goast.
 		return false, nil
 	}
 
+	con2, _ := isConstant(v.X)
+	if con2 {
+		return false, nil
+	}
+
 	// from:
 	// any1 * ( constants * any2)
 	// to:
