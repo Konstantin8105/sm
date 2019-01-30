@@ -54,6 +54,7 @@ func walk(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
 	// try simplification
 	rules := []func(goast.Expr) (bool, goast.Expr){
 		constants,
+		constantsLeft,
 	}
 	for i := range rules {
 		changed, r = rules[i](a)
@@ -80,11 +81,40 @@ func walk(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
 	case *goast.BasicLit:
 		// ignore
 
+	case *goast.Ident:
+		// ignore
+
 	default:
 		panic(fmt.Errorf("Add implementation for type %T", a))
 	}
 
+	// all is not changed
 	return false, a
+}
+
+func constantsLeft(a goast.Expr) (changed bool, r goast.Expr) {
+	v, ok := a.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil
+	}
+	// any + constants
+	xOk, _ := isConstant(v.X)
+	yOk, _ := isConstant(v.Y)
+	if !(!xOk && yOk) {
+		return false, nil
+	}
+
+	switch v.Op {
+	case token.ADD, // +
+		token.MUL: // *
+
+	default:
+		return false, nil
+	}
+
+	// swap
+	v.X, v.Y = v.Y, v.X
+	return true, v
 }
 
 func constants(a goast.Expr) (changed bool, r goast.Expr) {
@@ -114,7 +144,7 @@ func constants(a goast.Expr) (changed bool, r goast.Expr) {
 
 	return true, &goast.BasicLit{
 		Kind:  token.FLOAT,
-		Value: fmt.Sprintf("%5e", result),
+		Value: fmt.Sprintf("%.3f", result),
 	}
 }
 
