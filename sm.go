@@ -55,6 +55,8 @@ func walk(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
 	rules := []func(goast.Expr) (bool, goast.Expr){
 		constants,
 		constantsLeft,
+		openParenLeft,
+		openParenRight,
 	}
 	for i := range rules {
 		changed, r = rules[i](a)
@@ -90,6 +92,106 @@ func walk(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
 
 	// all is not changed
 	return false, a
+}
+
+func openParenLeft(a goast.Expr) (changed bool, r goast.Expr) {
+	v, ok := a.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil
+	}
+
+	// from:
+	// any * (... -+ ...)
+	// to:
+	// ((any * X) -+  (any * Y))
+	if v.Op != token.MUL {
+		return false, nil
+	}
+	par, ok := v.Y.(*goast.ParenExpr)
+	if !ok {
+		return false, nil
+	}
+	bin, ok := par.X.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil
+	}
+	if bin.Op != token.ADD && bin.Op != token.SUB {
+		return false, nil
+	}
+
+	// create workspace
+	var (
+		any = v.X
+		X   = bin.X
+		Y   = bin.Y
+		Op  = bin.Op
+	)
+
+	return true, &goast.ParenExpr{
+		X: &goast.BinaryExpr{
+			X: &goast.ParenExpr{X: &goast.BinaryExpr{
+				X:  any,
+				Op: token.MUL,
+				Y:  X,
+			}},
+			Op: Op,
+			Y: &goast.ParenExpr{X: &goast.BinaryExpr{
+				X:  any,
+				Op: token.MUL,
+				Y:  Y,
+			}},
+		},
+	}
+}
+
+func openParenRight(a goast.Expr) (changed bool, r goast.Expr) {
+	v, ok := a.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil
+	}
+
+	// from:
+	// (... -+ ...) * any
+	// to:
+	// ((any * X) -+ (any * Y))
+	if v.Op != token.MUL {
+		return false, nil
+	}
+	par, ok := v.X.(*goast.ParenExpr)
+	if !ok {
+		return false, nil
+	}
+	bin, ok := par.X.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil
+	}
+	if bin.Op != token.ADD && bin.Op != token.SUB {
+		return false, nil
+	}
+
+	// create workspace
+	var (
+		any = v.Y
+		X   = bin.X
+		Y   = bin.Y
+		Op  = bin.Op
+	)
+
+	return true, &goast.ParenExpr{
+		X: &goast.BinaryExpr{
+			X: &goast.ParenExpr{X: &goast.BinaryExpr{
+				X:  any,
+				Op: token.MUL,
+				Y:  X,
+			}},
+			Op: Op,
+			Y: &goast.ParenExpr{X: &goast.BinaryExpr{
+				X:  any,
+				Op: token.MUL,
+				Y:  Y,
+			}},
+		},
+	}
 }
 
 func constantsLeft(a goast.Expr) (changed bool, r goast.Expr) {

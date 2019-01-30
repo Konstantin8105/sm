@@ -33,6 +33,9 @@ func Test(t *testing.T) {
 		}, {
 			expr: "(2+8)*a",
 			out:  "10.000 * a",
+		}, {
+			expr: "(2+8*a)*a",
+			out:  "2.000 * a + 8.000 * a * a",
 		},
 	}
 
