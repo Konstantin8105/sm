@@ -31,7 +31,7 @@ func (s sm) errorGen(e error) error {
 	_ = et.Add(fmt.Errorf("Expression: %s", s.base))
 	{
 		var ei errors.Tree
-		ei.Name = "Constants:"
+		ei.Name = "Constants :"
 		for i := range s.cons {
 			_ = ei.Add(fmt.Errorf("%s", s.cons[i]))
 		}
@@ -39,7 +39,7 @@ func (s sm) errorGen(e error) error {
 	}
 	{
 		var ei errors.Tree
-		ei.Name = "Variables:"
+		ei.Name = "Variables :"
 		for i := range s.vars {
 			_ = ei.Add(fmt.Errorf("%s", s.vars[i]))
 		}
@@ -47,7 +47,7 @@ func (s sm) errorGen(e error) error {
 	}
 	{
 		var ei errors.Tree
-		ei.Name = "Functions:"
+		ei.Name = "Functions :"
 		for i := range s.funs {
 			_ = ei.Add(fmt.Errorf("%s %v", s.funs[i].name, s.funs[i].variables))
 		}
@@ -154,12 +154,10 @@ func Sexpr(out io.Writer, expr string) (re string, err error) {
 		if err != nil {
 			return "", err
 		}
-		{
-			var buf bytes.Buffer
-			printer.Fprint(&buf, token.NewFileSet(), a)
-			re = buf.String()
-			fmt.Fprintf(out, "%s\n", re)
-		}
+
+		// debug
+		fmt.Fprintf(out, "%s\n", astToStr(a))
+
 		if !changed {
 			break
 		}
@@ -172,13 +170,15 @@ func Sexpr(out io.Writer, expr string) (re string, err error) {
 	// debug
 	// goast.Print(token.NewFileSet(), a)
 
+	re = astToStr(a)
+
 	return
 }
 
-func view(a goast.Expr) {
+func astToStr(a goast.Expr) string {
 	var buf bytes.Buffer
 	printer.Fprint(&buf, token.NewFileSet(), a)
-	fmt.Println(buf.String())
+	return buf.String()
 }
 
 var counter int
@@ -235,7 +235,7 @@ func (s *sm) walk(a goast.Expr) (c bool, _ goast.Expr, _ error) {
 			}
 			if c {
 				// fmt.Println("rules = ", i)
-				view(a)
+				// fmt.Println(astToStr(a))
 				a = r
 				changed = true
 				goto begin
