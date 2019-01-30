@@ -47,6 +47,9 @@ func Sexpr(out io.Writer, expr string, variables ...string) (re string, err erro
 		iter++
 	}
 
+	// debug
+	goast.Print(token.NewFileSet(), a)
+
 	return
 }
 
@@ -57,6 +60,8 @@ func walk(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
 		constantsLeft,
 		openParenLeft,
 		openParenRight,
+		openParen,
+		openParenNumber,
 	}
 	for i := range rules {
 		changed, r = rules[i](a)
@@ -92,6 +97,72 @@ func walk(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
 
 	// all is not changed
 	return false, a
+}
+
+func openParenNumber(a goast.Expr) (changed bool, r goast.Expr) {
+	par, ok := a.(*goast.ParenExpr)
+	if !ok {
+		return false, nil
+	}
+
+	// from:
+	// (number)
+	// to:
+	// number
+	num, ok := par.X.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil
+	}
+
+	return true, num
+}
+
+func openParen(a goast.Expr) (changed bool, r goast.Expr) {
+	par, ok := a.(*goast.ParenExpr)
+	if !ok {
+		return false, nil
+	}
+
+	// from:
+	// (... */ ...)
+	// to:
+	// (...) */  (...)
+	bin, ok := par.X.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil
+	}
+	if bin.Op != token.MUL && bin.Op != token.QUO {
+		return false, nil
+	}
+	var (
+		Op = bin.Op
+		X  = bin.X
+		Y  = bin.Y
+	)
+
+	switch X.(type) {
+	// no need paren
+	case *goast.BasicLit, *goast.Ident:
+
+	default:
+		X = &goast.ParenExpr{X: X}
+	}
+
+	switch Y.(type) {
+	// no need paren
+	case *goast.BasicLit, *goast.Ident:
+
+	default:
+		Y = &goast.ParenExpr{X: Y}
+	}
+
+	r = &goast.BinaryExpr{
+		X:  X,
+		Op: Op,
+		Y:  Y,
+	}
+
+	return true, r
 }
 
 func openParenLeft(a goast.Expr) (changed bool, r goast.Expr) {
