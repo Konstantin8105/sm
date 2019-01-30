@@ -71,6 +71,10 @@ func init() {
 		sortIdentMul,          // 8
 		functionPow,           // 9
 		oneMul,                // 10
+		binaryNumber,          // 11
+		parenParen,            // 12
+		binaryUnary,           // 13
+		// zeroValue,             // 14
 	}
 }
 
@@ -181,6 +185,175 @@ func walk(a goast.Expr, variables []string) (c bool, _ goast.Expr) {
 
 	// all is not changed
 	return false, a
+}
+
+func binaryUnary(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+	bin, ok := a.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil
+	}
+	if bin.Op != token.ADD && bin.Op != token.SUB {
+		return false, nil
+	}
+
+	var unary *goast.UnaryExpr
+	found := false
+	if par, ok := bin.Y.(*goast.ParenExpr); ok {
+		if un, ok := par.X.(*goast.UnaryExpr); ok {
+			unary = un
+			found = true
+		}
+	}
+	if un, ok := bin.Y.(*goast.UnaryExpr); ok {
+		unary = un
+		found = true
+	}
+	if !found {
+		return false, nil
+	}
+
+	// from:
+	// ... + (-...)
+	// to:
+	// ... - (...)
+	if bin.Op == token.ADD && unary.Op == token.SUB {
+		return true, &goast.BinaryExpr{
+			X:  bin.X,
+			Op: token.SUB,
+			Y:  unary.X,
+		}
+	}
+
+	// from:
+	// ... - (-...)
+	// to:
+	// ... + (...)
+	if bin.Op == token.SUB && unary.Op == token.SUB {
+		return true, &goast.BinaryExpr{
+			X:  bin.X,
+			Op: token.ADD,
+			Y:  unary.X,
+		}
+	}
+
+	// from:
+	// ... - (+...)
+	// to:
+	// ... - (...)
+	if bin.Op == token.SUB && unary.Op == token.ADD {
+		return true, &goast.BinaryExpr{
+			X:  bin.X,
+			Op: token.SUB,
+			Y:  unary.X,
+		}
+	}
+
+	// from:
+	// ... + (+...)
+	// to:
+	// ... + (...)
+	return true, &goast.BinaryExpr{
+		X:  bin.X,
+		Op: token.ADD,
+		Y:  unary.X,
+	}
+}
+
+func parenParen(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+	par, ok := a.(*goast.ParenExpr)
+	if !ok {
+		return false, nil
+	}
+	parPar, ok := par.X.(*goast.ParenExpr)
+	if !ok {
+		return false, nil
+	}
+
+	// from :
+	// (( ... ))
+	// to :
+	// (...)
+	return true, parPar
+}
+
+func binaryNumber(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+	bin, ok := a.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil
+	}
+	if bin.Op != token.ADD && bin.Op != token.SUB {
+		return false, nil
+	}
+
+	leftBin, ok := bin.Y.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil
+	}
+	if leftBin.Op != token.ADD && leftBin.Op != token.SUB {
+		return false, nil
+	}
+
+	nOk1, _ := isConstant(bin.X)
+	if !nOk1 {
+		return false, nil
+	}
+	nOk2, _ := isConstant(leftBin.X)
+	if !nOk2 {
+		return false, nil
+	}
+
+	num1 := bin.X
+	num2 := leftBin.X
+
+	// from:
+	// number1 + (number2 +- ...)
+	// to:
+	// (number1 + number2) +- (...)
+	if bin.Op == token.ADD {
+		return true, &goast.BinaryExpr{
+			X: &goast.ParenExpr{
+				X: &goast.BinaryExpr{
+					X:  num1,
+					Op: bin.Op,
+					Y:  num2,
+				},
+			},
+			Op: leftBin.Op,
+			Y:  &goast.ParenExpr{X: leftBin.Y},
+		}
+	}
+	// from:
+	// number1 - (number2 + ...)
+	// to:
+	// (number1 - number2) - (...)
+	if bin.Op == token.SUB && leftBin.Op == token.ADD {
+		return true, &goast.BinaryExpr{
+			X: &goast.ParenExpr{
+				X: &goast.BinaryExpr{
+					X:  num1,
+					Op: bin.Op,
+					Y:  num2,
+				},
+			},
+			Op: token.SUB,
+			Y:  &goast.ParenExpr{X: leftBin.Y},
+		}
+	}
+	// from:
+	// number1 - (number2 - ...)
+	// to:
+	// (number1 - number2) + (...)
+	return true, &goast.BinaryExpr{
+		X: &goast.ParenExpr{
+			X: &goast.BinaryExpr{
+				X:  num1,
+				Op: bin.Op,
+				Y:  num2,
+			},
+		},
+		Op: token.ADD,
+		Y:  &goast.ParenExpr{X: leftBin.Y},
+	}
 }
 
 func oneMul(a goast.Expr, variables []string) (changed bool, r goast.Expr) {

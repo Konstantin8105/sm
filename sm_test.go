@@ -98,6 +98,10 @@ func Test(t *testing.T) {
 			out:  "1.000",
 		},
 		{
+			expr: "-1+(-a)+(+5)+(+2+3+1)",
+			out:  "10.000 - a",
+		},
+		{
 			expr: "pow(2,pow(4,-2))",
 			// true value is 0.0625
 			// formatting error
