@@ -961,6 +961,11 @@ func (s *sm) constants(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	if !xOk || !yOk {
 		return false, nil, nil
 	}
+
+	if int64(y) == 0 {
+		return false, nil, fmt.Errorf("cannot divide by zero")
+	}
+
 	var result float64
 	switch v.Op {
 	case token.ADD: // +
