@@ -49,7 +49,7 @@ func Sexpr(out io.Writer, expr string, variables ...string) (re string, err erro
 	}
 
 	// debug
-	goast.Print(token.NewFileSet(), a)
+	// goast.Print(token.NewFileSet(), a)
 
 	return
 }
@@ -80,36 +80,30 @@ var counter int
 
 func walk(a goast.Expr, variables []string) (c bool, _ goast.Expr) {
 	// debug
-	var buf bytes.Buffer
-	printer.Fprint(&buf, token.NewFileSet(), a)
-	fmt.Println(counter, "walk:before: ", buf.String())
-	counter++
-	defer func() {
-		// debug
-		var buf bytes.Buffer
-		printer.Fprint(&buf, token.NewFileSet(), a)
-		counter--
-		fmt.Println(counter, "walk:after : ", buf.String(), c)
-	}()
+	// var buf bytes.Buffer
+	// printer.Fprint(&buf, token.NewFileSet(), a)
+	// fmt.Println(counter, "walk:before: ", buf.String())
+	// counter++
+	// defer func() {
+	// debug
+	// var buf bytes.Buffer
+	// printer.Fprint(&buf, token.NewFileSet(), a)
+	// counter--
+	// fmt.Println(counter, "walk:after : ", buf.String(), c)
+	// }()
 
 	// try simplification
 	{
 		var changed bool
 		var r goast.Expr
 		for i := 0; i < len(rules); i++ {
-			fmt.Println("try rules = ", i)
+			// fmt.Println("try rules = ", i)
 			var c bool
 			c, r = rules[i](a, variables)
 			if c {
-				fmt.Println("rules = ", i)
+				// fmt.Println("rules = ", i)
 				a = r
 				changed = true
-				{
-					// debug
-					var buf bytes.Buffer
-					printer.Fprint(&buf, token.NewFileSet(), a)
-					fmt.Println(counter, "rule result: ", buf.String())
-				}
 				i = 0
 			}
 		}
