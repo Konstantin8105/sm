@@ -19,7 +19,7 @@ var maxIteration int64 = 1000000
 var iter int64
 
 // Sexpr - simplification of expression.
-func Sexpr(out io.Writer, expr string, variables ...string) (re string, err error) {
+func Sexpr(out io.Writer, expr string) (re string, err error) {
 	if out == nil {
 		out = os.Stdout
 	}
@@ -33,7 +33,7 @@ func Sexpr(out io.Writer, expr string, variables ...string) (re string, err erro
 	iter = 0
 	var changed bool
 	for {
-		changed, a = walk(a, variables)
+		changed, a = walk(a)
 		{
 			var buf bytes.Buffer
 			printer.Fprint(&buf, token.NewFileSet(), a)
@@ -56,10 +56,10 @@ func Sexpr(out io.Writer, expr string, variables ...string) (re string, err erro
 	return
 }
 
-var rules []func(goast.Expr, []string) (bool, goast.Expr)
+var rules []func(goast.Expr) (bool, goast.Expr)
 
 func init() {
-	rules = []func(goast.Expr, []string) (bool, goast.Expr){
+	rules = []func(goast.Expr) (bool, goast.Expr){
 		constants,             // 0
 		constantsLeft,         // 1
 		constantsLeftLeft,     // 2
@@ -87,7 +87,7 @@ func view(a goast.Expr) {
 
 var counter int
 
-func walk(a goast.Expr, variables []string) (c bool, _ goast.Expr) {
+func walk(a goast.Expr) (c bool, _ goast.Expr) {
 	// debug
 	// var buf bytes.Buffer
 	// printer.Fprint(&buf, token.NewFileSet(), a)
@@ -113,7 +113,7 @@ func walk(a goast.Expr, variables []string) (c bool, _ goast.Expr) {
 	begin:
 		for i := 0; i < len(rules); i++ {
 			// fmt.Println("try rules = ", i)
-			if c, r = rules[i](a, variables); c {
+			if c, r = rules[i](a); c {
 				// fmt.Println("rules = ", i)
 				view(a)
 				a = r
@@ -129,19 +129,19 @@ func walk(a goast.Expr, variables []string) (c bool, _ goast.Expr) {
 	// go deeper
 	switch v := a.(type) {
 	case *goast.BinaryExpr:
-		cX, rX := walk(v.X, variables)
+		cX, rX := walk(v.X)
 		if cX {
 			v.X = rX
 			return true, v
 		}
-		cY, rY := walk(v.Y, variables)
+		cY, rY := walk(v.Y)
 		if cY {
 			v.Y = rY
 			return true, v
 		}
 
 	case *goast.ParenExpr:
-		return walk(v.X, variables)
+		return walk(v.X)
 
 	case *goast.BasicLit:
 		if v.Kind == token.INT {
@@ -154,7 +154,7 @@ func walk(a goast.Expr, variables []string) (c bool, _ goast.Expr) {
 		if bas, ok := v.X.(*goast.BasicLit); ok {
 			return true, createFloat(fmt.Sprintf("%v%s", v.Op, bas.Value))
 		}
-		c, e := walk(v.X, variables)
+		c, e := walk(v.X)
 		if c {
 			return true, &goast.UnaryExpr{
 				Op: v.Op,
@@ -167,7 +167,7 @@ func walk(a goast.Expr, variables []string) (c bool, _ goast.Expr) {
 		call.Fun = v.Fun
 		var changed bool
 		for i := range v.Args {
-			if c, e := walk(v.Args[i], variables); c {
+			if c, e := walk(v.Args[i]); c {
 				changed = true
 				call.Args = append(call.Args, e)
 				continue
@@ -186,7 +186,7 @@ func walk(a goast.Expr, variables []string) (c bool, _ goast.Expr) {
 	return false, a
 }
 
-func binaryUnary(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+func binaryUnary(a goast.Expr) (changed bool, r goast.Expr) {
 	bin, ok := a.(*goast.BinaryExpr)
 	if !ok {
 		return false, nil
@@ -258,7 +258,7 @@ func binaryUnary(a goast.Expr, variables []string) (changed bool, r goast.Expr) 
 	}
 }
 
-func parenParen(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+func parenParen(a goast.Expr) (changed bool, r goast.Expr) {
 	par, ok := a.(*goast.ParenExpr)
 	if !ok {
 		return false, nil
@@ -275,7 +275,7 @@ func parenParen(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
 	return true, parPar
 }
 
-func binaryNumber(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+func binaryNumber(a goast.Expr) (changed bool, r goast.Expr) {
 	bin, ok := a.(*goast.BinaryExpr)
 	if !ok {
 		return false, nil
@@ -355,7 +355,7 @@ func binaryNumber(a goast.Expr, variables []string) (changed bool, r goast.Expr)
 	}
 }
 
-func oneMul(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+func oneMul(a goast.Expr) (changed bool, r goast.Expr) {
 	bin, ok := a.(*goast.BinaryExpr)
 	if !ok {
 		return false, nil
@@ -389,7 +389,7 @@ func oneMul(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
 	return true, bin.Y
 }
 
-func differential(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+func differential(a goast.Expr) (changed bool, r goast.Expr) {
 	call, ok := a.(*goast.CallExpr)
 	if !ok {
 		return false, nil
@@ -408,7 +408,7 @@ func differential(a goast.Expr, variables []string) (changed bool, r goast.Expr)
 	return false, nil
 }
 
-func functionPow(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+func functionPow(a goast.Expr) (changed bool, r goast.Expr) {
 	call, ok := a.(*goast.CallExpr)
 	if !ok {
 		return false, nil
@@ -491,7 +491,7 @@ func functionPow(a goast.Expr, variables []string) (changed bool, r goast.Expr) 
 	}
 }
 
-func openParenSingleIdent(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+func openParenSingleIdent(a goast.Expr) (changed bool, r goast.Expr) {
 	par, ok := a.(*goast.ParenExpr)
 	if !ok {
 		return false, nil
@@ -509,7 +509,7 @@ func openParenSingleIdent(a goast.Expr, variables []string) (changed bool, r goa
 	return true, num
 }
 
-func openParenSingleNumber(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+func openParenSingleNumber(a goast.Expr) (changed bool, r goast.Expr) {
 	par, ok := a.(*goast.ParenExpr)
 	if !ok {
 		return false, nil
@@ -527,7 +527,7 @@ func openParenSingleNumber(a goast.Expr, variables []string) (changed bool, r go
 	return true, num
 }
 
-func openParen(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+func openParen(a goast.Expr) (changed bool, r goast.Expr) {
 	par, ok := a.(*goast.ParenExpr)
 	if !ok {
 		return false, nil
@@ -575,7 +575,7 @@ func openParen(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
 	return true, r
 }
 
-func openParenRight(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+func openParenRight(a goast.Expr) (changed bool, r goast.Expr) {
 	v, ok := a.(*goast.BinaryExpr)
 	if !ok {
 		return false, nil
@@ -615,7 +615,7 @@ func openParenRight(a goast.Expr, variables []string) (changed bool, r goast.Exp
 
 	{
 		// try simplification inside paren
-		c, b := walk(bin, variables)
+		c, b := walk(bin)
 		if c {
 			return true, &goast.BinaryExpr{
 				X:  any,
@@ -660,7 +660,7 @@ func insideParen(a goast.Expr) (in goast.Expr, ok bool) {
 	return nil, false
 }
 
-func openParenLeft(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+func openParenLeft(a goast.Expr) (changed bool, r goast.Expr) {
 	v, ok := a.(*goast.BinaryExpr)
 	if !ok {
 		return false, nil
@@ -689,10 +689,10 @@ func openParenLeft(a goast.Expr, variables []string) (changed bool, r goast.Expr
 	}
 
 	v.X, v.Y = v.Y, v.X
-	return openParenRight(v, variables)
+	return openParenRight(v)
 }
 
-func zeroValueMul(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+func zeroValueMul(a goast.Expr) (changed bool, r goast.Expr) {
 	v, ok := a.(*goast.BinaryExpr)
 	if !ok {
 		return false, nil
@@ -717,7 +717,7 @@ func zeroValueMul(a goast.Expr, variables []string) (changed bool, r goast.Expr)
 	return true, createFloat("0")
 }
 
-func constantsLeft(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+func constantsLeft(a goast.Expr) (changed bool, r goast.Expr) {
 	v, ok := a.(*goast.BinaryExpr)
 	if !ok {
 		return false, nil
@@ -742,7 +742,7 @@ func constantsLeft(a goast.Expr, variables []string) (changed bool, r goast.Expr
 	return true, v
 }
 
-func constantsLeftLeft(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+func constantsLeftLeft(a goast.Expr) (changed bool, r goast.Expr) {
 	v, ok := a.(*goast.BinaryExpr)
 	if !ok {
 		return false, nil
@@ -783,7 +783,7 @@ func constantsLeftLeft(a goast.Expr, variables []string) (changed bool, r goast.
 	}
 }
 
-func sortIdentMul(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+func sortIdentMul(a goast.Expr) (changed bool, r goast.Expr) {
 	v, ok := a.(*goast.BinaryExpr)
 	if !ok {
 		return false, nil
@@ -814,7 +814,7 @@ func sortIdentMul(a goast.Expr, variables []string) (changed bool, r goast.Expr)
 	}
 }
 
-func constants(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+func constants(a goast.Expr) (changed bool, r goast.Expr) {
 	v, ok := a.(*goast.BinaryExpr)
 	if !ok {
 		return false, nil

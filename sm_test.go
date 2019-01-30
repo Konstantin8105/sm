@@ -9,9 +9,8 @@ import (
 
 func Test(t *testing.T) {
 	tcs := []struct {
-		expr      string
-		variables []string
-		out       string
+		expr string
+		out  string
 	}{
 		{
 			expr: "1+2",
@@ -112,11 +111,11 @@ func Test(t *testing.T) {
 			out:  "0.000",
 		},
 		{
-			expr: "d(pow(x,a),x)",
+			expr: "d(pow(x,a),x);constant(a);variable(x);",
 			out:  "a*pow(x,a - 1)",
 		},
 		{
-			expr: "b*d(a*x,x)",
+			expr: "b*d(a*x,x);constant(a);variable(x);",
 			out:  "a * b",
 		},
 		{
@@ -124,15 +123,15 @@ func Test(t *testing.T) {
 			out:  "b",
 		},
 		{
-			expr: "a*d(a,x)",
+			expr: "a*d(a,x);constant(a);variable(x);",
 			out:  "0.000",
 		},
 		{
-			expr: "d(2*pow(x,a),x)",
+			expr: "d(2*pow(x,a),x);constant(a);variable(x);",
 			out:  "2.000*a*pow(x,a - 1)",
 		},
 		{
-			expr: "d(pow(x,a+1),x)",
+			expr: "d(pow(x,a+1),x);constant(a);variable(x);",
 			out:  "(a+1)*pow(x,a)",
 		},
 		{
@@ -144,14 +143,14 @@ func Test(t *testing.T) {
 			out:  "(d(u,x)*v - u*d(v,x)) / (v * v)",
 		},
 		{
-			expr: "d((2*(3*x-4))/(pow(x,2)+1),x)",
+			expr: "d((2*(3*x-4))/(pow(x,2)+1),x);variable(x);",
 			out:  "2*(-3*x*x+8*x+3)/((x*x+1)*(x*x+1))",
 		},
 	}
 
 	for i := range tcs {
 		t.Run(fmt.Sprintf("%d:%s", i, tcs[i].expr), func(t *testing.T) {
-			a, err := sm.Sexpr(nil, tcs[i].expr, tcs[i].variables...)
+			a, err := sm.Sexpr(nil, tcs[i].expr)
 			if err != nil {
 				t.Fatal(err)
 			}
