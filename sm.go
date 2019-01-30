@@ -166,8 +166,7 @@ func walk(a goast.Expr, variables []string) (c bool, _ goast.Expr) {
 		call.Fun = v.Fun
 		var changed bool
 		for i := range v.Args {
-			c, e := walk(v.Args[i], variables)
-			if c {
+			if c, e := walk(v.Args[i], variables); c {
 				changed = true
 				call.Args = append(call.Args, e)
 				continue
