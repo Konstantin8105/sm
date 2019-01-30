@@ -53,6 +53,10 @@ func Test(t *testing.T) {
 			expr: "b*(2+3-1+8*a)",
 			out:  "4.000*b + 8.000*(a*b)",
 		},
+		{
+			expr: "b/(2+3-1+a*8)",
+			out:  "b / (4.000 + 8.000*a)",
+		},
 	}
 
 	for i := range tcs {
