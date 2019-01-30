@@ -14,7 +14,9 @@ import (
 	goast "go/ast"
 )
 
+// TODO : remove global variables
 var maxIteration int64 = 1000000
+var iter int64
 
 // Sexpr - simplification of expression.
 func Sexpr(out io.Writer, expr string, variables ...string) (re string, err error) {
@@ -28,7 +30,7 @@ func Sexpr(out io.Writer, expr string, variables ...string) (re string, err erro
 		return
 	}
 
-	var iter int64
+	iter = 0
 	var changed bool
 	for {
 		changed, a = walk(a, variables)
@@ -92,6 +94,12 @@ func walk(a goast.Expr, variables []string) (c bool, _ goast.Expr) {
 	// counter--
 	// fmt.Println(counter, "walk:after : ", buf.String(), c)
 	// }()
+
+	// iteration limit
+	iter++
+	if iter > maxIteration {
+		panic(fmt.Errorf("maximal iteration limit"))
+	}
 
 	// try simplification
 	{
