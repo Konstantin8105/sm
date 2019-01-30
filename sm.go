@@ -15,8 +15,8 @@ import (
 
 var maxIteration int64 = 1000000
 
-// Sexpr - simplification of expression
-func Sexpr(out io.Writer, expr string) (re string, err error) {
+// Sexpr - simplification of expression.
+func Sexpr(out io.Writer, expr string, variables ...string) (re string, err error) {
 	if out == nil {
 		out = os.Stdout
 	}
@@ -30,7 +30,7 @@ func Sexpr(out io.Writer, expr string) (re string, err error) {
 	var iter int64
 	var changed bool
 	for {
-		changed, a = walk(a)
+		changed, a = walk(a, variables)
 		{
 			var buf bytes.Buffer
 			printer.Fprint(&buf, token.NewFileSet(), a)
@@ -50,7 +50,7 @@ func Sexpr(out io.Writer, expr string) (re string, err error) {
 	return
 }
 
-func walk(a goast.Expr) (changed bool, r goast.Expr) {
+func walk(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
 	// try simplification
 	rules := []func(goast.Expr) (bool, goast.Expr){
 		constants,
@@ -65,8 +65,8 @@ func walk(a goast.Expr) (changed bool, r goast.Expr) {
 	// go deeper
 	switch v := a.(type) {
 	case *goast.BinaryExpr:
-		cX, rX := walk(v.X)
-		cY, rY := walk(v.Y)
+		cX, rX := walk(v.X, variables)
+		cY, rY := walk(v.Y, variables)
 		changed = cX || cY
 		r = a
 		v.X = rX
@@ -74,7 +74,7 @@ func walk(a goast.Expr) (changed bool, r goast.Expr) {
 		return changed, r
 
 	case *goast.ParenExpr:
-		changed, r = walk(v.X)
+		changed, r = walk(v.X, variables)
 		return
 
 	case *goast.BasicLit:
