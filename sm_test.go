@@ -65,6 +65,14 @@ func Test(t *testing.T) {
 			expr: "pow(a,2)",
 			out:  "a * a",
 		},
+		{
+			expr: "pow(a,3)",
+			out:  "a * (a * a)",
+		},
+		{
+			expr: "pow(a,-3)",
+			out:  "1.000 / a * (1.000 / a * (1.000 / a))",
+		},
 	}
 
 	for i := range tcs {

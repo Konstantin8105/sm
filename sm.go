@@ -68,6 +68,7 @@ func init() {
 		openParenSingleIdent,  // 7
 		sortIdentMul,          // 8
 		functionPow,           // 9
+		oneMul,                // 10
 	}
 }
 
@@ -133,6 +134,18 @@ func walk(a goast.Expr, variables []string) (c bool, _ goast.Expr) {
 
 	case *goast.Ident: // ignore
 
+	case *goast.UnaryExpr:
+		if bas, ok := v.X.(*goast.BasicLit); ok {
+			return true, createFloat(fmt.Sprintf("%v%s", v.Op, bas.Value))
+		}
+		c, e := walk(v.X, variables)
+		if c {
+			return true, &goast.UnaryExpr{
+				Op: v.Op,
+				X:  e,
+			}
+		}
+
 	case *goast.CallExpr:
 		var call goast.CallExpr
 		call.Fun = v.Fun
@@ -159,6 +172,40 @@ func walk(a goast.Expr, variables []string) (c bool, _ goast.Expr) {
 	return false, a
 }
 
+func oneMul(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
+	bin, ok := a.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil
+	}
+	if bin.Op != token.MUL {
+		return false, nil
+	}
+	bas, ok := bin.X.(*goast.BasicLit)
+	if !ok {
+		return false, nil
+	}
+
+	val, err := strconv.ParseFloat(bas.Value, 64)
+	if err != nil {
+		panic(err)
+	}
+
+	if val != float64(int64(val)) {
+		return false, nil
+	}
+
+	exn := int64(val)
+	if exn != 1 {
+		return false, nil
+	}
+
+	// from :
+	// 1 * any
+	// to:
+	// any
+	return true, bin.Y
+}
+
 func functionPow(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
 	call, ok := a.(*goast.CallExpr)
 	if !ok {
@@ -171,24 +218,20 @@ func functionPow(a goast.Expr, variables []string) (changed bool, r goast.Expr) 
 	if id.Name != "pow" {
 		return false, nil
 	}
-	fmt.Println("2")
 	if len(call.Args) != 2 {
 		panic("function pow have not 2 arguments")
 	}
 
-	fmt.Println("22")
 	e, ok := call.Args[1].(*goast.BasicLit)
 	if !ok {
 		return false, nil
 	}
 
-	fmt.Println("3")
 	exponent, err := strconv.ParseFloat(e.Value, 64)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println("4", exponent, exponent == float64(int64(exponent)))
 	if exponent != float64(int64(exponent)) {
 		return false, nil
 	}
@@ -248,7 +291,7 @@ func functionPow(a goast.Expr, variables []string) (changed bool, r goast.Expr) 
 	// from:
 	// pow(..., -33)
 	// to:
-	// pow(..., -32) / (...)
+	// pow(..., -32) * 1.0 / (...)
 	x1 := call.Args[0]
 	x2 := call.Args[0]
 	return true, &goast.BinaryExpr{
@@ -256,11 +299,15 @@ func functionPow(a goast.Expr, variables []string) (changed bool, r goast.Expr) 
 			Fun: goast.NewIdent("pow"),
 			Args: []goast.Expr{
 				x1,
-				createFloat(fmt.Sprintf("%d", exn-1)),
+				createFloat(fmt.Sprintf("%d", exn+1)),
 			},
 		},
-		Op: token.QUO,
-		Y:  &goast.ParenExpr{X: x2},
+		Op: token.MUL,
+		Y: &goast.BinaryExpr{
+			X:  createFloat("1"),
+			Op: token.QUO,
+			Y:  &goast.ParenExpr{X: x2},
+		},
 	}
 }
 
@@ -462,7 +509,7 @@ func openParenLeft(a goast.Expr, variables []string) (changed bool, r goast.Expr
 	}
 
 	v.X, v.Y = v.Y, v.X
-	return true, v
+	return openParenRight(v, variables)
 }
 
 func constantsLeft(a goast.Expr, variables []string) (changed bool, r goast.Expr) {
