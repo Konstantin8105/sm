@@ -166,11 +166,22 @@ func Test(t *testing.T) {
 				t.Fatal(err)
 			}
 			ac := strings.Replace(a, " ", "", -1)
+			///
 			ec := strings.Replace(tcs[i].out, " ", "", -1)
 			if ac != ec {
 				t.Fatalf("Is not same '%s' != '%s'", a, tcs[i].out)
 			}
+			///
 			t.Log(a)
+			a2, err := sm.Sexpr(nil, tcs[i].out)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ac2 := strings.Replace(a, " ", "", -1)
+			if ac != ac2 {
+				t.Fatalf("Is not same '%s' != '%s'", a, tcs[i].out)
+			}
+			t.Log(a2)
 		})
 	}
 }
