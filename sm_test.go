@@ -2,6 +2,7 @@ package sm_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/Konstantin8105/sm"
@@ -110,13 +111,15 @@ func Test(t *testing.T) {
 			expr: "pow(9,9)*4*(-3+3)*0+12.3*0-wer*0-0*wed",
 			out:  "0.000",
 		},
+
+		// differential
 		{
 			expr: "d(pow(x,a),x);constant(a);variable(x);",
 			out:  "a*pow(x,a - 1)",
 		},
 		{
 			expr: "d(pow(x,2),x);variable(x);",
-			out:  "a * x",
+			out:  "2 * x",
 		},
 		{
 			expr: "d(pow(x,3),x);variable(x);",
@@ -162,7 +165,9 @@ func Test(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if a != tcs[i].out {
+			ac := strings.Replace(a, " ", "", -1)
+			ec := strings.Replace(tcs[i].out, " ", "", -1)
+			if ac != ec {
 				t.Fatalf("Is not same '%s' != '%s'", a, tcs[i].out)
 			}
 			t.Log(a)

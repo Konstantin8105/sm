@@ -25,6 +25,15 @@ type sm struct {
 	iter int64
 }
 
+func (s sm) isVariable(name string) bool {
+	for i := range s.vars {
+		if s.vars[i] == name {
+			return true
+		}
+	}
+	return false
+}
+
 func (s sm) errorGen(e error) error {
 	var et errors.Tree
 	et.Name = "Error of symbolic math"
@@ -145,6 +154,21 @@ func Sexpr(out io.Writer, expr string) (re string, err error) {
 		s.base = lines[i]
 	}
 
+	// avoid extra spaces in names
+	for i := range s.cons {
+		s.cons[i] = strings.TrimSpace(s.cons[i])
+	}
+	for i := range s.vars {
+		s.vars[i] = strings.TrimSpace(s.vars[i])
+	}
+	for i := range s.funs {
+		s.funs[i].name = strings.TrimSpace(s.funs[i].name)
+		for j := range s.funs[i].variables {
+			s.funs[i].variables[j] = strings.TrimSpace(s.funs[i].variables[j])
+		}
+	}
+
+	// parse base expression
 	var a goast.Expr
 	a, err = parser.ParseExpr(s.base)
 	if err != nil {
@@ -540,6 +564,66 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	if len(call.Args) != 2 {
 		panic("function pow have not 2 arguments")
 	}
+	id, ok = call.Args[1].(*goast.Ident)
+	if !ok {
+		return false, nil, s.errorGen(fmt.Errorf(
+			"Second argument of differential is not variable"))
+	}
+
+	dvar := id.Name
+	if !s.isVariable(dvar) {
+		return false, nil, s.errorGen(fmt.Errorf(
+			"Second argument of differential is not initialized like variable"))
+	}
+
+	if bin, ok := call.Args[0].(*goast.BinaryExpr); ok {
+		switch bin.Op {
+		case token.MUL: // *
+			// rule:
+			// d(u*v,x) = d(u,x)*v + u*d(v,x)
+			// where `u` and `v` is any
+			u1 := bin.X
+			u2 := bin.X
+			v1 := bin.Y
+			v2 := bin.Y
+			return true, &goast.BinaryExpr{
+				X: &goast.BinaryExpr{
+					X: &goast.CallExpr{
+						Fun: goast.NewIdent("d"),
+						Args: []goast.Expr{
+							u1,
+							id,
+						},
+					},
+					Op: token.MUL,
+					Y:  v1,
+				},
+				Op: token.ADD,
+				Y: &goast.BinaryExpr{
+					X:  u2,
+					Op: token.MUL,
+					Y: &goast.CallExpr{
+						Fun: goast.NewIdent("d"),
+						Args: []goast.Expr{
+							v2,
+							id,
+						},
+					},
+				},
+			}, nil
+		}
+	}
+
+	{
+		// from:
+		// d(number, x)
+		// to:
+		// 0.000
+		num, _ := isConstant(call.Args[0])
+		if num {
+			return true, createFloat("0"), nil
+		}
+	}
 
 	return false, nil, nil
 }
@@ -836,11 +920,7 @@ func (s *sm) zeroValueMul(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	if !ok {
 		return false, nil, nil
 	}
-	if v.Op != token.MUL {
-		return false, nil, nil
-	}
 
-	// constants * any
 	xOk, x := isConstant(v.X)
 	yOk, _ := isConstant(v.Y)
 	if !(xOk && !yOk) {
@@ -853,7 +933,26 @@ func (s *sm) zeroValueMul(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		return false, nil, nil
 	}
 
-	return true, createFloat("0"), nil
+	switch v.Op {
+	case token.MUL, // *
+		token.QUO: // /
+		// from:
+		// 0.000 * any
+		// to:
+		// 0.000
+		return true, createFloat("0"), nil
+
+	case token.ADD, // +
+		token.SUB: // -
+		// from:
+		// 0.000 + any
+		// to:
+		// any
+		return true, v.Y, nil
+	}
+
+	return false, nil, nil
+
 }
 
 func (s *sm) constantsLeft(a goast.Expr) (changed bool, r goast.Expr, _ error) {
