@@ -624,6 +624,17 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 			return true, createFloat("0"), nil
 		}
 	}
+	{
+		// from:
+		// d(x,x)
+		// to:
+		// 1.000
+		if x, ok := call.Args[0].(*goast.Ident); ok {
+			if x.Name == dvar {
+				return true, createFloat("1"), nil
+			}
+		}
+	}
 
 	return false, nil, nil
 }

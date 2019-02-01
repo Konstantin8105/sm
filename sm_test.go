@@ -119,7 +119,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "d(pow(x,2),x);variable(x);",
-			out:  "2 * x",
+			out:  "x + x",
 		},
 		{
 			expr: "d(pow(x,3),x);variable(x);",
