@@ -474,25 +474,11 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	// number1 * (number2 / ...)
 	// to:
 	// (number1 * number2) / (...)
-	if bin.Op == token.MUL && leftBin.Op == token.QUO {
-		return true, &goast.BinaryExpr{
-			X: &goast.ParenExpr{
-				X: &goast.BinaryExpr{
-					X:  num1,
-					Op: token.MUL,
-					Y:  num2,
-				},
-			},
-			Op: token.MUL,
-			Y:  &goast.ParenExpr{X: leftBin.Y},
-		}, nil
-	}
-
 	// from:
 	// number1 * (number2 * ...)
 	// to:
 	// (number1 * number2) * (...)
-	if bin.Op == token.MUL && leftBin.Op == token.MUL {
+	if bin.Op == token.MUL && (leftBin.Op == token.QUO || leftBin.Op == token.MUL) {
 		return true, &goast.BinaryExpr{
 			X: &goast.ParenExpr{
 				X: &goast.BinaryExpr{
@@ -501,7 +487,7 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 					Y:  num2,
 				},
 			},
-			Op: token.MUL,
+			Op: leftBin.Op,
 			Y:  &goast.ParenExpr{X: leftBin.Y},
 		}, nil
 	}
