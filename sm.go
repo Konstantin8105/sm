@@ -25,6 +25,15 @@ type sm struct {
 	iter int64
 }
 
+func (s sm) isConstant(name string) bool {
+	for i := range s.cons {
+		if s.cons[i] == name {
+			return true
+		}
+	}
+	return false
+}
+
 func (s sm) isVariable(name string) bool {
 	for i := range s.vars {
 		if s.vars[i] == name {
@@ -634,6 +643,24 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 				return true, createFloat("1"), nil
 			}
 		}
+	}
+	{
+		// from:
+		// d(constant,x)
+		// to:
+		// constant * d(1.000,x)
+		if con, ok := call.Args[0].(*goast.Ident); ok {
+			name := con.Name
+			if s.isConstant(name) {
+				call.Args[0] = createFloat("1")
+				return true, &goast.BinaryExpr{
+					X:  goast.NewIdent(name),
+					Op: token.MUL,
+					Y:  call,
+				}, nil
+			}
+		}
+
 	}
 
 	return false, nil, nil
