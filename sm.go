@@ -16,6 +16,10 @@ import (
 	"github.com/Konstantin8105/errors"
 )
 
+const (
+	pow = "pow"
+)
+
 type sm struct {
 	base string
 	expr string
@@ -625,6 +629,38 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 
 	{
 		// from:
+		// d(pow(x,a), x)
+		// where a is constant
+		// to:
+		// a * pow(x, a-1)
+		val, exp, ok, err := isFunctionPow(call.Args[0])
+		if ok {
+			if err != nil {
+				return false, nil, s.errorGen(err)
+			}
+			if x, ok := val.(*goast.Ident); ok && x.Name == dvar {
+				if id, ok := exp.(*goast.Ident); ok && s.isConstant(id.Name) {
+					return true, &goast.BinaryExpr{
+						X:  goast.NewIdent(id.Name),
+						Op: token.MUL,
+						Y: &goast.CallExpr{
+							Fun: goast.NewIdent(pow),
+							Args: []goast.Expr{
+								goast.NewIdent(dvar),
+								&goast.BinaryExpr{
+									X:  exp,
+									Op: token.SUB,
+									Y:  createFloat("1.000"),
+								},
+							},
+						},
+					}, nil
+				}
+			}
+		}
+	}
+	{
+		// from:
 		// d(number, x)
 		// to:
 		// 0.000
@@ -660,29 +696,40 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 				}, nil
 			}
 		}
-
 	}
 
 	return false, nil, nil
 }
 
-func (s *sm) functionPow(a goast.Expr) (changed bool, r goast.Expr, _ error) {
+func isFunctionPow(a goast.Expr) (val, exp goast.Expr, ok bool, err error) {
 	call, ok := a.(*goast.CallExpr)
 	if !ok {
-		return false, nil, nil
+		return nil, nil, false, nil
 	}
 	id, ok := call.Fun.(*goast.Ident)
 	if !ok {
-		return false, nil, nil
+		return nil, nil, false, nil
 	}
-	if id.Name != "pow" {
-		return false, nil, nil
+	if id.Name != pow {
+		return nil, nil, false, nil
 	}
 	if len(call.Args) != 2 {
-		panic("function pow have not 2 arguments")
+		return nil, nil, true, fmt.Errorf("function pow have not 2 arguments")
 	}
 
-	e, ok := call.Args[1].(*goast.BasicLit)
+	return call.Args[0], call.Args[1], true, nil
+}
+
+func (s *sm) functionPow(a goast.Expr) (changed bool, r goast.Expr, _ error) {
+	val, exp, ok, err := isFunctionPow(a)
+	if !ok {
+		return false, nil, nil
+	}
+	if err != nil {
+		return false, nil, s.errorGen(err)
+	}
+
+	e, ok := exp.(*goast.BasicLit)
 	if !ok {
 		return false, nil, nil
 	}
@@ -711,13 +758,13 @@ func (s *sm) functionPow(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		// pow(..., 33)
 		// to:
 		// (...) * pow(..., 32)
-		x1 := call.Args[0]
-		x2 := call.Args[0]
+		x1 := val
+		x2 := val
 		return true, &goast.BinaryExpr{
 			X:  &goast.ParenExpr{X: x1},
 			Op: token.MUL,
 			Y: &goast.CallExpr{
-				Fun: goast.NewIdent("pow"),
+				Fun: goast.NewIdent(pow),
 				Args: []goast.Expr{
 					x2,
 					createFloat(fmt.Sprintf("%d", exn-1)),
@@ -730,11 +777,11 @@ func (s *sm) functionPow(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	// pow(..., -33)
 	// to:
 	// pow(..., -32) * 1.0 / (...)
-	x1 := call.Args[0]
-	x2 := call.Args[0]
+	x1 := val
+	x2 := val
 	return true, &goast.BinaryExpr{
 		X: &goast.CallExpr{
-			Fun: goast.NewIdent("pow"),
+			Fun: goast.NewIdent(pow),
 			Args: []goast.Expr{
 				x1,
 				createFloat(fmt.Sprintf("%d", exn+1)),
