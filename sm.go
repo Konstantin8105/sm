@@ -84,6 +84,9 @@ func Sexpr(out io.Writer, expr string) (re string, err error) {
 	lines := strings.Split(expr, ";")
 	// parse to full expression to parts
 	for i := range lines {
+		if strings.TrimSpace(lines[i]) == "" {
+			continue
+		}
 		a, err := parser.ParseExpr(lines[i])
 		if err != nil {
 			return "", s.errorGen(err)
