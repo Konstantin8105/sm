@@ -108,9 +108,17 @@ type function struct {
 }
 
 // Sexpr - simplification of expression.
-func Sexpr(out io.Writer, expr string) (re string, err error) {
-	if out == nil {
-		out = os.Stdout
+// Example:
+//
+//	expr : "b*(2+3-1+8*a)",
+//	out  : "4.000*b + 8.000*(a*b)",
+//
+//	expr: "d(2*pow(x,a),x);constant(a);variable(x);",
+//	out:  "2.000*(a*pow(x,a - 1.000))",
+//
+func Sexpr(o io.Writer, expr string) (out string, err error) {
+	if o == nil {
+		o = os.Stdout
 	}
 
 	var s sm
@@ -211,7 +219,7 @@ func Sexpr(out io.Writer, expr string) (re string, err error) {
 		}
 
 		// debug
-		fmt.Fprintf(out, "Next step result: %s\n", astToStr(a))
+		fmt.Fprintf(o, "%s\n", astToStr(a))
 
 		if !changed {
 			break
@@ -225,7 +233,7 @@ func Sexpr(out io.Writer, expr string) (re string, err error) {
 	// debug
 	// goast.Print(token.NewFileSet(), a)
 
-	re = astToStr(a)
+	out = astToStr(a)
 
 	return
 }
