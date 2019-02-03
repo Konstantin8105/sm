@@ -111,6 +111,15 @@ func Test(t *testing.T) {
 			expr: "pow(9,9)*4*(-3+3)*0+12.3*0-wer*0-0*wed",
 			out:  "0.000",
 		},
+		// divide by divide
+		{
+			expr: "(a/b)/(c/d)",
+			out:  "a * d / (b * c)",
+		},
+		{
+			expr: "a/(c/d)",
+			out:  "a * d / c",
+		},
 	}
 
 	for i := range tcs {
