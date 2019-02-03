@@ -157,6 +157,14 @@ func Test(t *testing.T) {
 			expr: "d((2*(3*x-4))/(pow(x,2)+1),x);variable(x);",
 			out:  "2*(-3*x*x+8*x+3)/((x*x+1)*(x*x+1))",
 		},
+		{
+			expr: "d(u + v,x);function(u,x);function(v,x);",
+			out:  "d(u,x) + d(v,x)",
+		},
+		{
+			expr: "d(u - v,x);function(u,x);function(v,x);",
+			out:  "d(u,x) - d(v,x)",
+		},
 		// divide by divide
 		{
 			expr: "(a/b)/(c/d)",
