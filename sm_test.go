@@ -157,6 +157,15 @@ func Test(t *testing.T) {
 			expr: "d((2*(3*x-4))/(pow(x,2)+1),x);variable(x);",
 			out:  "2*(-3*x*x+8*x+3)/((x*x+1)*(x*x+1))",
 		},
+		// divide by divide
+		{
+			expr: "(a/b)/(c/d)",
+			out:  "a * d / (b * c)",
+		},
+		{
+			expr: "a/(c/d)",
+			out:  "a * d / c",
+		},
 	}
 
 	for i := range tcs {

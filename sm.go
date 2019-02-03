@@ -267,6 +267,8 @@ func (s *sm) walk(a goast.Expr) (c bool, _ goast.Expr, _ error) {
 			s.binaryUnary,           // 13
 			s.zeroValueMul,          // 14
 			s.differential,          // 15
+			s.divideDivide,          // 15
+			s.divide,                // 16
 		} {
 			// fmt.Println("try rules = ", i)
 			c, r, err = rule(a)
@@ -357,6 +359,79 @@ func (s *sm) walk(a goast.Expr) (c bool, _ goast.Expr, _ error) {
 
 	// all is not changed
 	return false, a, nil
+}
+
+func (s *sm) divideDivide(a goast.Expr) (changed bool, r goast.Expr, _ error) {
+	bin, ok := a.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil, nil
+	}
+	if bin.Op != token.QUO {
+		return false, nil, nil
+	}
+	leftBin, ok := bin.X.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil, nil
+	}
+	if leftBin.Op != token.QUO {
+		return false, nil, nil
+	}
+	rightBin, ok := bin.Y.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil, nil
+	}
+	if rightBin.Op != token.QUO {
+		return false, nil, nil
+	}
+
+	// from:
+	// (a/b)/(c/d)
+	// to:
+	// (a*d)/(b*c)
+	return true, &goast.BinaryExpr{
+		X: &goast.ParenExpr{X: &goast.BinaryExpr{
+			X:  leftBin.X,
+			Op: token.MUL,
+			Y:  rightBin.Y,
+		}},
+		Op: token.QUO,
+		Y: &goast.ParenExpr{X: &goast.BinaryExpr{
+			X:  leftBin.Y,
+			Op: token.MUL,
+			Y:  rightBin.X,
+		}},
+	}, nil
+}
+
+func (s *sm) divide(a goast.Expr) (changed bool, r goast.Expr, _ error) {
+	bin, ok := a.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil, nil
+	}
+	if bin.Op != token.QUO {
+		return false, nil, nil
+	}
+	leftBin, ok := bin.Y.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil, nil
+	}
+	if leftBin.Op != token.QUO {
+		return false, nil, nil
+	}
+
+	// from:
+	// a/(b/c)
+	// to:
+	// (a*b)/c
+	return true, &goast.BinaryExpr{
+		X: &goast.BinaryExpr{
+			X:  bin.X,
+			Op: token.MUL,
+			Y:  leftBin.Y,
+		},
+		Op: token.QUO,
+		Y:  leftBin.X,
+	}, nil
 }
 
 func (s *sm) binaryUnary(a goast.Expr) (changed bool, r goast.Expr, _ error) {
