@@ -17,7 +17,8 @@ import (
 )
 
 const (
-	pow = "pow"
+	pow          = "pow"
+	differential = "d"
 )
 
 type sm struct {
@@ -122,7 +123,8 @@ func Sexpr(out io.Writer, expr string) (re string, err error) {
 			switch funIdent.Name {
 			case "function":
 				if len(call.Args) < 2 {
-					return "", s.errorGen(fmt.Errorf("function have minimal 2 arguments - name of function and depend variable"))
+					return "", s.errorGen(fmt.Errorf(
+						"function have minimal 2 arguments - name of function and depend variable"))
 				}
 				var f function
 				// name of function
@@ -196,7 +198,7 @@ func Sexpr(out io.Writer, expr string) (re string, err error) {
 		}
 
 		// debug
-		fmt.Fprintf(out, "%s\n", astToStr(a))
+		fmt.Fprintf(out, "Next step result: %s\n", astToStr(a))
 
 		if !changed {
 			break
@@ -267,10 +269,12 @@ func (s *sm) walk(a goast.Expr) (c bool, _ goast.Expr, _ error) {
 			s.binaryUnary,           // 13
 			s.zeroValueMul,          // 14
 			s.differential,          // 15
-			s.divideDivide,          // 15
-			s.divide,                // 16
+			s.divideDivide,          // 16
+			s.divide,                // 17
 		} {
 			// fmt.Println("try rules = ", i)
+			// fmt.Println(s)
+			// fmt.Println(astToStr(a))
 			c, r, err = rule(a)
 			if err != nil {
 				return false, nil, err
@@ -668,7 +672,7 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	if !ok {
 		return false, nil, nil
 	}
-	if id.Name != "d" {
+	if id.Name != differential {
 		return false, nil, nil
 	}
 	if len(call.Args) != 2 {
@@ -683,11 +687,55 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	dvar := id.Name
 	if !s.isVariable(dvar) {
 		return false, nil, s.errorGen(fmt.Errorf(
-			"Second argument of differential is not initialized like variable"))
+			"Second argument of differential is not initialized like variable"+
+				": `%s`", dvar))
 	}
 
 	if bin, ok := call.Args[0].(*goast.BinaryExpr); ok {
 		switch bin.Op {
+		case token.QUO: // /
+			// rule:
+			// d(u/v,x) = (d(u,x)*v - u*d(v,x)) / (v * v)
+			// where `u` and `v` is any
+			u1 := bin.X
+			u2 := bin.X
+			v1 := bin.Y
+			v2 := bin.Y
+			v3 := bin.Y
+			return true, &goast.BinaryExpr{
+				X: &goast.ParenExpr{X: &goast.BinaryExpr{
+					X: &goast.BinaryExpr{
+						X: &goast.CallExpr{
+							Fun: goast.NewIdent(differential),
+							Args: []goast.Expr{
+								u1,
+								goast.NewIdent(dvar),
+							},
+						},
+						Op: token.MUL,
+						Y:  v1,
+					},
+					Op: token.SUB,
+					Y: &goast.BinaryExpr{
+						X:  u2,
+						Op: token.MUL,
+						Y: &goast.CallExpr{
+							Fun: goast.NewIdent(differential),
+							Args: []goast.Expr{
+								v2,
+								goast.NewIdent(dvar),
+							},
+						},
+					},
+				}},
+				Op: token.QUO,
+				Y: &goast.ParenExpr{X: &goast.BinaryExpr{
+					X:  v3,
+					Op: token.MUL,
+					Y:  v3,
+				}},
+			}, nil
+
 		case token.MUL: // *
 			// rule:
 			// d(u*v,x) = d(u,x)*v + u*d(v,x)
@@ -699,7 +747,7 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 			return true, &goast.BinaryExpr{
 				X: &goast.BinaryExpr{
 					X: &goast.CallExpr{
-						Fun: goast.NewIdent("d"),
+						Fun: goast.NewIdent(differential),
 						Args: []goast.Expr{
 							u1,
 							id,
@@ -713,7 +761,7 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 					X:  u2,
 					Op: token.MUL,
 					Y: &goast.CallExpr{
-						Fun: goast.NewIdent("d"),
+						Fun: goast.NewIdent(differential),
 						Args: []goast.Expr{
 							v2,
 							id,
