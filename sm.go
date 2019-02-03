@@ -116,6 +116,12 @@ type function struct {
 //	expr: "d(2*pow(x,a),x);constant(a);variable(x);",
 //	out:  "2.000*(a*pow(x,a - 1.000))",
 //
+// Keywords:
+//
+//	constant(a); for constants
+//	variables(a); for variables
+//  function(a,x,y,z,...); for function a(x,y,z)
+//
 func Sexpr(o io.Writer, expr string) (out string, err error) {
 	if o == nil {
 		o = os.Stdout
