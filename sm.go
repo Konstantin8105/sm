@@ -48,6 +48,19 @@ func (s sm) isVariable(name string) bool {
 	return false
 }
 
+func (s sm) isFunction(name, arg string) bool {
+	for i := range s.funs {
+		if name == s.funs[i].name {
+			for j := range s.funs[i].variables {
+				if arg == s.funs[i].variables[j] {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 func (s sm) errorGen(e error) error {
 	var et errors.Tree
 	et.Name = "Error of symbolic math"
@@ -794,20 +807,28 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	}
 
 	{
-		// from:
-		// d(pow(x,a), x)
-		// where a is constant
-		// to:
-		// a * pow(x, a-1)
 		val, exp, ok, err := isFunctionPow(call.Args[0])
 		if ok {
 			if err != nil {
 				return false, nil, s.errorGen(err)
 			}
 			if x, ok := val.(*goast.Ident); ok && x.Name == dvar {
+				found := false
 				if id, ok := exp.(*goast.Ident); ok && s.isConstant(id.Name) {
+					found = true
+				}
+				if ok, _ := isConstant(exp); ok {
+					found = true
+				}
+
+				if found {
+					// from:
+					// d(pow(x,a), x)
+					// where a is constant or number
+					// to:
+					// a * pow(x, a-1)
 					return true, &goast.BinaryExpr{
-						X:  goast.NewIdent(id.Name),
+						X:  exp,
 						Op: token.MUL,
 						Y: &goast.CallExpr{
 							Fun: goast.NewIdent(pow),
@@ -860,6 +881,17 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 					Op: token.MUL,
 					Y:  call,
 				}, nil
+			}
+		}
+	}
+	{
+		// from :
+		// d(a,x); function(a,z);
+		// to:
+		// 0.000
+		if id, ok := call.Args[0].(*goast.Ident); ok {
+			if ok := s.isFunction(id.Name, dvar); !ok {
+				return true, createFloat("0.0"), nil
 			}
 		}
 	}

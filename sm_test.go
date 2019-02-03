@@ -119,7 +119,15 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "d(pow(x,2),x);variable(x);",
-			out:  "x + x",
+			out:  "2.000 * x",
+		},
+		{
+			expr: "d(pow(a,2),x);variable(x);constant(a)",
+			out:  "0.000",
+		},
+		{
+			expr: "d(pow(a,2),x);variable(x);function(a,z)",
+			out:  "0.000",
 		},
 		{
 			expr: "d(pow(x,3),x);variable(x);",
@@ -130,8 +138,8 @@ func Test(t *testing.T) {
 			out:  "a * b",
 		},
 		{
-			expr: "b*d(a*x,a*x);constant(a);variable(x);",
-			out:  "b",
+			expr: "b*d(a*x,x);constant(a);variable(x);",
+			out:  "a * b",
 		},
 		{
 			expr: "a*d(a,x);constant(a);variable(x);",
