@@ -1,6 +1,25 @@
 # sm
 symbolic math on Go
 
+```golang
+package s
+
+func f() {
+	_ = func() {
+		////////////////////////////
+		// code of script         //
+		constant(u)
+		A := [2][2]float64{{12, 22}, {33, 44}}
+		constant(a)
+		s := pow(u, 2) + a
+		Q := A * s
+		output(Q)
+		////////////////////////////
+	}
+}
+```
+
+
 ```go
   // Prototype example:
   parse(
