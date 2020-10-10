@@ -227,6 +227,10 @@ func Test(t *testing.T) {
 			expr: "matrix(5+a,1,1)*a",
 			out:  "matrix(5.000*a+a*a,1.000,1.000)",
 		},
+		{
+			expr: "matrix(5+a,4,0,-2*a,2,2)*a",
+			out:  "matrix(5.000*a+a*a,1.000,1.000)",
+		},
 	}
 
 	for i := range tcs {
