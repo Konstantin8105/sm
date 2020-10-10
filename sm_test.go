@@ -203,6 +203,14 @@ func Test(t *testing.T) {
 			expr: "matrixTrans(2+5,9,3, 5-1+0-0,2,2)*matrix(1-2,+5,2,1)",
 			out:  "matrix(8.000,11.000,2.000,1.000)",
 		},
+		{
+			expr: "a*matrix(2+5,1,1)",
+			out:  "matrix(7.000*a,1.000,1.000)",
+		},
+		{
+			expr: "matrix(2+5,1,1)*a",
+			out:  "matrix(7.000*a,1.000,1.000)",
+		},
 	}
 
 	for i := range tcs {

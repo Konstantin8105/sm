@@ -301,6 +301,7 @@ func (s *sm) walk(a goast.Expr) (c bool, _ goast.Expr, _ error) {
 			s.divide,                // 17
 			s.matrixMultiply,        // 18
 			s.matrixTranspose,       // 19
+			s.sortMatrixMult,        // 20
 		} {
 			// fmt.Println("try rules = ", i)
 			// fmt.Println(s)
@@ -417,9 +418,9 @@ func (s *sm) matrixTranspose(e goast.Expr) (changed bool, r goast.Expr, _ error)
 	trans.args = make([]goast.Expr, len(mt.args))
 	trans.rows = mt.columns
 	trans.columns = mt.rows
-	for r := 0; r < mt.rows; r ++{
-		for c := 0; c < mt.columns; c++{
-			trans.args[trans.position(c,r)]= mt.args[mt.position(r,c)]
+	for r := 0; r < mt.rows; r++ {
+		for c := 0; c < mt.columns; c++ {
+			trans.args[trans.position(c, r)] = mt.args[mt.position(r, c)]
 		}
 	}
 
@@ -1418,6 +1419,34 @@ func (s *sm) constantsLeftLeft(a goast.Expr) (changed bool, r goast.Expr, _ erro
 	}, nil
 }
 
+func (s *sm) sortMatrixMult(a goast.Expr) (changed bool, r goast.Expr, _ error) {
+	v, ok := a.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil, nil
+	}
+	if v.Op != token.MUL {
+		return false, nil, nil
+	}
+	_, ok = isMatrix(v.X)
+	if !ok {
+		return false, nil, nil
+	}
+	_, ok = v.Y.(*goast.Ident)
+	if !ok {
+		return false, nil, nil
+	}
+
+	// from :
+	// (matrix(...)*a)
+	// to :
+	// (a*matrix(...))
+	return true, &goast.BinaryExpr{
+		X:  v.Y,
+		Op: token.MUL,
+		Y:  v.X,
+	}, nil
+}
+
 func (s *sm) sortIdentMul(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	v, ok := a.(*goast.BinaryExpr)
 	if !ok {
@@ -1443,9 +1472,9 @@ func (s *sm) sortIdentMul(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	// to :
 	// (a*b)
 	return true, &goast.BinaryExpr{
-		X:  y,
+		X:  v.Y,
 		Op: token.MUL,
-		Y:  x,
+		Y:  v.X,
 	}, nil
 }
 
