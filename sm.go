@@ -18,6 +18,7 @@ import (
 const (
 	pow          = "pow"
 	differential = "d"
+	matrix       = "matrix"
 )
 
 type sm struct {
@@ -297,6 +298,7 @@ func (s *sm) walk(a goast.Expr) (c bool, _ goast.Expr, _ error) {
 			s.differential,          // 15
 			s.divideDivide,          // 16
 			s.divide,                // 17
+			s.matrixMultiply,        //18
 		} {
 			// fmt.Println("try rules = ", i)
 			// fmt.Println(s)
@@ -389,6 +391,63 @@ func (s *sm) walk(a goast.Expr) (c bool, _ goast.Expr, _ error) {
 
 	// all is not changed
 	return false, a, nil
+}
+
+func (s *sm) matrixMultiply(a goast.Expr) (changed bool, r goast.Expr, _ error) {
+	// matrix(...)*matrix(...)
+	bin, ok := a.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil, nil
+	}
+	if bin.Op != token.MUL {
+		return false, nil, nil
+	}
+
+	left, ok := isMatrix(bin.X)
+	if !ok {
+		return false, nil, nil
+	}
+	right, ok := isMatrix(bin.Y)
+	if !ok {
+		return false, nil, nil
+	}
+	if left.columns != right.rows {
+		return false, nil, fmt.Errorf("not valid matrix multiplication")
+	}
+
+	result := &goast.CallExpr{
+		Fun: goast.NewIdent(matrix),
+	}
+	// multiplication
+	for lr := 0; lr < left.rows; lr++ {
+		for rc := 0; rc < right.columns; rc++ {
+			var arg goast.Expr
+			for p := 0; p < left.columns; p++ {
+				mul := &goast.BinaryExpr{
+					X:  left.args[left.position(lr, p)],   // left
+					Op: token.MUL,                         // *
+					Y:  right.args[right.position(p, rc)], // right
+				}
+				// fmt.Println(left,len(left.args),	left.position(lr,p))
+				if p == 0 {
+					arg = mul
+				} else {
+					arg = &goast.BinaryExpr{
+						X:  arg,
+						Op: token.ADD, // +
+						Y:  mul,
+					}
+				}
+			}
+			result.Args = append(result.Args, arg)
+		}
+	}
+	// rows
+	result.Args = append(result.Args, createFloat(fmt.Sprintf("%d", left.rows)))
+	// columns
+	result.Args = append(result.Args, createFloat(fmt.Sprintf("%d", right.columns)))
+
+	return true, result, nil
 }
 
 func (s *sm) divideDivide(a goast.Expr) (changed bool, r goast.Expr, _ error) {
@@ -1403,4 +1462,50 @@ func isConstant(node goast.Node) (ok bool, val float64) {
 		}
 	}
 	return false, 0.0
+}
+
+type m struct {
+	args          []goast.Expr
+	rows, columns int
+}
+
+func (matrix m) position(r, c int) int {
+	return c + matrix.columns*r
+}
+
+func isMatrix(e goast.Expr) (mt *m, ok bool) {
+	call, ok := e.(*goast.CallExpr)
+	if !ok {
+		return nil, false
+	}
+	id, ok := call.Fun.(*goast.Ident)
+	if !ok {
+		return nil, false
+	}
+	if id.Name != matrix {
+		return nil, false
+	}
+	mt = new(m)
+	mt.args = call.Args[:len(call.Args)-2]
+	// parse rows and columns
+	ok, v := isConstant(call.Args[len(call.Args)-2])
+	if !ok {
+		return nil, false
+	}
+	mt.rows = int(v)
+
+	ok, v = isConstant(call.Args[len(call.Args)-1])
+	if !ok {
+		return nil, false
+	}
+	mt.columns = int(v)
+
+	if len(mt.args) != mt.rows*mt.columns {
+		panic(fmt.Errorf("not valid matrix: args=%d rows=%d columns=%d",
+			len(mt.args),
+			mt.rows,
+			mt.columns,
+		))
+	}
+	return mt, true
 }
