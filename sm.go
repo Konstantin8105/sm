@@ -301,7 +301,8 @@ func (s *sm) walk(a goast.Expr) (c bool, _ goast.Expr, _ error) {
 			s.divide,                // 17
 			s.matrixMultiply,        // 18
 			s.matrixTranspose,       // 19
-			s.sortMatrixMult,        // 20
+			s.mulConstToMatrix,      // 20
+			s.sortMatrixMult,        // 21
 		} {
 			// fmt.Println("try rules = ", i)
 			// fmt.Println(s)
@@ -1417,6 +1418,43 @@ func (s *sm) constantsLeftLeft(a goast.Expr) (changed bool, r goast.Expr, _ erro
 			Y:  bin.Y,
 		},
 	}, nil
+}
+
+func (s *sm) mulConstToMatrix(a goast.Expr) (changed bool, r goast.Expr, _ error) {
+	v, ok := a.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil, nil
+	}
+	if v.Op != token.MUL {
+		return false, nil, nil
+	}
+	ok, _ = isConstant(v.X)
+	if !ok {
+		return false, nil, nil
+	}
+	mt, ok := isMatrix(v.Y)
+	if !ok {
+		return false, nil, nil
+	}
+
+	for i := 0; i < len(mt.args); i++ {
+		mt.args[i] = &goast.BinaryExpr{
+			X:  &goast.ParenExpr{X: mt.args[i]},
+			Op: token.MUL, // *
+			Y:  &goast.ParenExpr{X: v.X},
+		}
+	}
+
+	result := &goast.CallExpr{
+		Fun: goast.NewIdent(matrix),
+		Args: mt.args,
+	}
+	// rows
+	result.Args = append(result.Args, createFloat(fmt.Sprintf("%d", mt.rows)))
+	// columns
+	result.Args = append(result.Args, createFloat(fmt.Sprintf("%d", mt.columns)))
+
+	return true, result, nil
 }
 
 func (s *sm) sortMatrixMult(a goast.Expr) (changed bool, r goast.Expr, _ error) {
