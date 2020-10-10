@@ -208,8 +208,12 @@ func Test(t *testing.T) {
 			out:  "matrix(7.000*a,1.000,1.000)",
 		},
 		{
-			expr: "matrix(2+5,1,1)*a",
+			expr: "matrix(5+2,1,1)*a",
 			out:  "matrix(7.000*a,1.000,1.000)",
+		},
+		{
+			expr: "matrix(5+2*a,1,1)*a",
+			out:  "matrix(5.000*a+2.000*a*a,1.000,1.000)",
 		},
 	}
 
