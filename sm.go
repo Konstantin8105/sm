@@ -19,7 +19,7 @@ const (
 	pow          = "pow"
 	differential = "d"
 	matrix       = "matrix"
-	matrixTrans  = "matrixTrans"
+	transpose    = "transpose"
 )
 
 type sm struct {
@@ -406,11 +406,11 @@ func (s *sm) matrixTranspose(e goast.Expr) (changed bool, r goast.Expr, _ error)
 	if !ok {
 		return false, nil, nil
 	}
-	if id.Name != matrixTrans {
+	if id.Name != transpose {
 		return false, nil, nil
 	}
 	id.Name = matrix
-	mt, ok := isMatrix(e)
+	mt, ok := isMatrix(call.Args[0])
 	if !ok {
 		panic("not valid transpose matrix")
 	}
@@ -1432,6 +1432,10 @@ func (s *sm) mulConstToMatrix(a goast.Expr) (changed bool, r goast.Expr, _ error
 	if ok {
 		return false, nil, nil
 	}
+	ok = isTranspose(v.X)
+	if ok {
+		return false, nil, nil
+	}
 	mt, ok := isMatrix(v.Y)
 	if !ok {
 		return false, nil, nil
@@ -1595,6 +1599,9 @@ func isMatrix(e goast.Expr) (mt *m, ok bool) {
 		return nil, false
 	}
 	mt = new(m)
+	if len(call.Args) < 2 {
+		panic(fmt.Errorf("matrix is not valid: %#v\n%s", call, astToStr(call)))
+	}
 	mt.args = call.Args[:len(call.Args)-2]
 	// parse rows and columns
 	ok, v := isConstant(call.Args[len(call.Args)-2])
@@ -1617,4 +1624,19 @@ func isMatrix(e goast.Expr) (mt *m, ok bool) {
 		))
 	}
 	return mt, true
+}
+
+func isTranspose(e goast.Expr) (ok bool) {
+	call, ok := e.(*goast.CallExpr)
+	if !ok {
+		return false
+	}
+	id, ok := call.Fun.(*goast.Ident)
+	if !ok {
+		return false
+	}
+	if id.Name != transpose {
+		return false
+	}
+	return true
 }

@@ -1,7 +1,6 @@
 package sm_test
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"strings"
@@ -187,6 +186,7 @@ func Test(t *testing.T) {
 			expr: "a/(c/d)",
 			out:  "a * d / c",
 		},
+		// matrix
 		{
 			expr: "matrix(2+5,1,1)",
 			out:  "matrix(7.000,1.000,1.000)",
@@ -200,7 +200,7 @@ func Test(t *testing.T) {
 			out:  "matrix(38.000,17.000,2.000,1.000)",
 		},
 		{
-			expr: "matrixTrans(2+5,9,3, 5-1+0-0,2,2)*matrix(1-2,+5,2,1)",
+			expr: "transpose(matrix(2+5,9,3, 5-1+0-0,2,2))*matrix(1-2,+5,2,1)",
 			out:  "matrix(8.000,11.000,2.000,1.000)",
 		},
 		{
@@ -235,31 +235,23 @@ func Test(t *testing.T) {
 
 	for i := range tcs {
 		t.Run(fmt.Sprintf("%d:%s", i, tcs[i].expr), func(t *testing.T) {
-			var buf bytes.Buffer
-			a, err := sm.Sexpr(&buf, tcs[i].expr)
+			var (
+				act string
+				err error
+			)
+			if testing.Verbose() {
+				act, err = sm.Sexpr(os.Stdout, tcs[i].expr)
+			} else {
+				act, err = sm.Sexpr(nil, tcs[i].expr)
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
-			if testing.Verbose() {
-				fmt.Fprintf(os.Stdout, "%s", buf.String())
-			}
-			ac := strings.Replace(a, " ", "", -1)
-			///
+			act = strings.Replace(act, " ", "", -1)
 			ec := strings.Replace(tcs[i].out, " ", "", -1)
-			if ac != ec {
-				t.Fatalf("Is not same '%s' != '%s'", a, tcs[i].out)
+			if act != ec {
+				t.Fatalf("Is not same '%s' != '%s'", act, tcs[i].out)
 			}
-			///
-			// t.Log(a)
-			// a2, err := sm.Sexpr(nil, tcs[i].out)
-			// if err != nil {
-			// 	t.Fatal(err)
-			// }
-			// ac2 := strings.Replace(a, " ", "", -1)
-			// if ac != ac2 {
-			// 	t.Fatalf("Is not same '%s' != '%s'", a, tcs[i].out)
-			// }
-			// t.Log(a2)
 		})
 	}
 }
