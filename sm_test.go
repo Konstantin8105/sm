@@ -229,7 +229,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "matrix(5+a,4,0,-2*a,2,2)*a",
-			out:  "matrix(5.000*a+a*a,1.000,1.000)",
+			out:  "matrix(5.000*a+a*a,4.000*a,0.000,-2.000*(a*a),2.000,2.000)",
 		},
 	}
 
