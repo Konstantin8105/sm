@@ -1428,8 +1428,8 @@ func (s *sm) mulConstToMatrix(a goast.Expr) (changed bool, r goast.Expr, _ error
 	if v.Op != token.MUL {
 		return false, nil, nil
 	}
-	ok, _ = isConstant(v.X)
-	if !ok {
+	_, ok = isMatrix(v.X)
+	if ok {
 		return false, nil, nil
 	}
 	mt, ok := isMatrix(v.Y)
@@ -1446,7 +1446,7 @@ func (s *sm) mulConstToMatrix(a goast.Expr) (changed bool, r goast.Expr, _ error
 	}
 
 	result := &goast.CallExpr{
-		Fun: goast.NewIdent(matrix),
+		Fun:  goast.NewIdent(matrix),
 		Args: mt.args,
 	}
 	// rows
