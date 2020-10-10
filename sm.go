@@ -19,6 +19,7 @@ const (
 	pow          = "pow"
 	differential = "d"
 	matrix       = "matrix"
+	matrixTrans  = "matrixTrans"
 )
 
 type sm struct {
@@ -298,7 +299,8 @@ func (s *sm) walk(a goast.Expr) (c bool, _ goast.Expr, _ error) {
 			s.differential,          // 15
 			s.divideDivide,          // 16
 			s.divide,                // 17
-			s.matrixMultiply,        //18
+			s.matrixMultiply,        // 18
+			s.matrixTranspose,       // 19
 		} {
 			// fmt.Println("try rules = ", i)
 			// fmt.Println(s)
@@ -391,6 +393,46 @@ func (s *sm) walk(a goast.Expr) (c bool, _ goast.Expr, _ error) {
 
 	// all is not changed
 	return false, a, nil
+}
+
+func (s *sm) matrixTranspose(e goast.Expr) (changed bool, r goast.Expr, _ error) {
+	call, ok := e.(*goast.CallExpr)
+	if !ok {
+		return false, nil, nil
+	}
+	id, ok := call.Fun.(*goast.Ident)
+	if !ok {
+		return false, nil, nil
+	}
+	if id.Name != matrixTrans {
+		return false, nil, nil
+	}
+	id.Name = matrix
+	mt, ok := isMatrix(e)
+	if !ok {
+		panic("not valid transpose matrix")
+	}
+	// transpose
+	var trans m
+	trans.args = make([]goast.Expr, len(mt.args))
+	trans.rows = mt.columns
+	trans.columns = mt.rows
+	for r := 0; r < mt.rows; r ++{
+		for c := 0; c < mt.columns; c++{
+			trans.args[trans.position(c,r)]= mt.args[mt.position(r,c)]
+		}
+	}
+
+	result := &goast.CallExpr{
+		Fun:  goast.NewIdent(matrix),
+		Args: trans.args,
+	}
+	// rows
+	result.Args = append(result.Args, createFloat(fmt.Sprintf("%d", trans.rows)))
+	// columns
+	result.Args = append(result.Args, createFloat(fmt.Sprintf("%d", trans.columns)))
+
+	return true, result, nil
 }
 
 func (s *sm) matrixMultiply(a goast.Expr) (changed bool, r goast.Expr, _ error) {
