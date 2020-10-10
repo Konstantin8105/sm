@@ -201,7 +201,7 @@ func Test(t *testing.T) {
 				t.Fatalf("Is not same '%s' != '%s'", a, tcs[i].out)
 			}
 			///
-			t.Log(a)
+			// t.Log(a)
 			// a2, err := sm.Sexpr(nil, tcs[i].out)
 			// if err != nil {
 			// 	t.Fatal(err)

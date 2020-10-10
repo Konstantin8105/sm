@@ -7,7 +7,6 @@ import (
 	"go/printer"
 	"go/token"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 
@@ -124,7 +123,8 @@ type function struct {
 //
 func Sexpr(o io.Writer, expr string) (out string, err error) {
 	if o == nil {
-		o = os.Stdout
+		var buf bytes.Buffer
+		o = &buf
 	}
 
 	var s sm
@@ -224,7 +224,6 @@ func Sexpr(o io.Writer, expr string) (out string, err error) {
 			return "", err
 		}
 
-		// debug
 		fmt.Fprintf(o, "%s\n", astToStr(a))
 
 		if !changed {
