@@ -231,6 +231,138 @@ func Test(t *testing.T) {
 			expr: "matrix(5+a,4,0,-2*a,2,2)*a",
 			out:  "matrix(5.000*a+a*a,4.000*a,0.000,-2.000*(a*a),2.000,2.000)",
 		},
+		// integral
+		{
+			expr: "integral(0,x,0,1);variable(x)",
+			out:  "0.000",
+		},
+		{
+			expr: "integral(1,x,0,1);variable(x)",
+			out:  "1.000",
+		},
+		{
+			expr: "a*integral(1,x,0,1);variable(x)",
+			out:  "a",
+		},
+		{
+			expr: "integral(1,x,0,1)*a;variable(x)",
+			out:  "a",
+		},
+		{
+			expr: "integral(a,x,0,1);constant(a);variable(x)",
+			out:  "a",
+		},
+		{
+			expr: "integral(a+a,x,0,1);constant(a);variable(x)",
+			out:  "a+a",
+		},
+		{
+			expr: "integral(a-b,x,0,1);constant(a);constant(b);variable(x)",
+			out:  "a-b",
+		},
+
+		{
+			expr: "integral(0,x,2,4);variable(x)",
+			out:  "0.000",
+		},
+		{
+			expr: "integral(1,x,2,4);variable(x)",
+			out:  "2.000",
+		},
+		{
+			expr: "a*integral(1,x,2,4);variable(x)",
+			out:  "2.000*a",
+		},
+		{
+			expr: "integral(1,x,2,4)*a;variable(x)",
+			out:  "2.000*a",
+		},
+		{
+			expr: "integral(a,x,2,4);constant(a);variable(x)",
+			out:  "2.000*a",
+		},
+		{
+			expr: "integral(a+a,x,2,4);constant(a);variable(x)",
+			out:  "2.000*a+2.000*a",
+		},
+		{
+			expr: "integral(a-b,x,2,4);constant(a);constant(b);variable(x)",
+			out:  "2.000*a-2.000*b",
+		},
+
+		{
+			expr: "integral(a+x,x,0,1);constant(a);variable(x)",
+			out:  "0.500+a",
+		},
+		{
+			expr: "integral(a*x,x,0,1);constant(a);variable(x)",
+			out:  "0.500*a",
+		},
+		{
+			expr: "integral(pow(x,2),x,0,1);variable(x)",
+			out:  "a/3.000",
+		},
+		{
+			expr: "integral(a*pow(x,2),x,0,1);variable(x);constant(a)",
+			out:  "a/3.000",
+		},
+		{
+			expr: "integral(pow(x,2),x,1,2);variable(x)",
+			out:  "8.000*a/3.000-a/3.000",
+		},
+
+		{
+			expr: "integral(a+x,x,2,3);constant(a);variable(x)",
+			out:  "2.500+a",
+		},
+		{
+			expr: "integral(a*x,x,2,3);constant(a);variable(x)",
+			out:  "2.500*a",
+		},
+		{
+			expr: "integral(a*x*a,x,2,3);constant(a);variable(x)",
+			out:  "2.500*(a*a)",
+		},
+		{
+			expr: "integral(pow(x,2),x,2,3);variable(x)",
+			out:  "a/3.000",
+		},
+		{
+			expr: "integral(pow(x,3),x,2,3);variable(x)",
+			out:  "a/3.000",
+		},
+		{
+			expr: "integral(pow(x,4),x,2,3);variable(x)",
+			out:  "a/3.000",
+		},
+		{
+			expr: "integral(pow(a*x,2),x,2,3);variable(x)",
+			out:  "a/3.000",
+		},
+		{
+			expr: "integral(a*pow(x,2),x,2,3);variable(x);constant(a)",
+			out:  "a/3.000",
+		},
+		{
+			expr: "integral(a+a*pow(x,2)+pow(x,3)*a,x,2,3);variable(x);constant(a)",
+			out:  "a/3.000",
+		},
+		{
+			expr: "integral(-a+a*pow(x,2)+pow(x,3)*a,x,2,3);variable(x);constant(a)",
+			out:  "a/3.000",
+		},
+		{
+			expr: "integral(pow(x,2),x,2,3);variable(x)",
+			out:  "8.000*a/3.000-a/3.000",
+		},
+		{
+			expr: "integral(x*a*x*a*x*a,x,2,3);variable(x);constant(a)",
+			out:  "8.000*a/3.000-a/3.000",
+		},
+// 		{
+// 			expr: "integral(a+a/x,x,2,3);variable(x)",
+// 			out:  "8.000*a/3.000-a/3.000",
+// 		},
 	}
 
 	for i := range tcs {
