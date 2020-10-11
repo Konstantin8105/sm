@@ -300,15 +300,15 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "integral(pow(x,2),x,0,1);variable(x)",
-			out:  "a/3.000",
+			out:  "0.333",
 		},
 		{
 			expr: "integral(a*pow(x,2),x,0,1);variable(x);constant(a)",
-			out:  "a/3.000",
+			out:  "0.333*a",
 		},
 		{
 			expr: "integral(pow(x,2),x,1,2);variable(x)",
-			out:  "8.000*a/3.000-a/3.000",
+			out:  "2.334",
 		},
 
 		{
@@ -325,44 +325,36 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "integral(pow(x,2),x,2,3);variable(x)",
-			out:  "a/3.000",
+			out:  "6.333",
 		},
 		{
 			expr: "integral(pow(x,3),x,2,3);variable(x)",
-			out:  "a/3.000",
+			out:  "16.250",
 		},
 		{
-			expr: "integral(pow(x,4),x,2,3);variable(x)",
-			out:  "a/3.000",
+			expr: "integral(pow(a*x,3),x,2,3);variable(x);constant(a)",
+			out:  "16.250*(a*(a*a))",
 		},
 		{
-			expr: "integral(pow(a*x,2),x,2,3);variable(x)",
-			out:  "a/3.000",
+			expr: "integral(pow(a*x,2),x,2,3);variable(x);constant(a)",
+			out:  "6.333*(a*a)",
 		},
 		{
 			expr: "integral(a*pow(x,2),x,2,3);variable(x);constant(a)",
-			out:  "a/3.000",
+			out:  "6.333*a",
 		},
 		{
 			expr: "integral(a+a*pow(x,2)+pow(x,3)*a,x,2,3);variable(x);constant(a)",
-			out:  "a/3.000",
-		},
-		{
-			expr: "integral(-a+a*pow(x,2)+pow(x,3)*a,x,2,3);variable(x);constant(a)",
-			out:  "a/3.000",
+			out:  "a+6.333*a+16.250*a",
 		},
 		{
 			expr: "integral(pow(x,2),x,2,3);variable(x)",
-			out:  "8.000*a/3.000-a/3.000",
+			out:  "6.333",
 		},
 		{
 			expr: "integral(x*a*x*a*x*a,x,2,3);variable(x);constant(a)",
-			out:  "8.000*a/3.000-a/3.000",
+			out:  "16.250*(a*(a*a))",
 		},
-// 		{
-// 			expr: "integral(a+a/x,x,2,3);variable(x)",
-// 			out:  "8.000*a/3.000-a/3.000",
-// 		},
 	}
 
 	for i := range tcs {

@@ -1601,10 +1601,15 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 	// inject(pow(x,1+1)/(1+1), x, 1) - inject(pow(x,1+1)/(1+1), x, 0)
 	//
 	{
-		ind1, ok1 := ifn.(*goast.Ident)
-		ind2, ok2 := vars.(*goast.Ident)
-		n := 1.0
-		if ok1 && ok2 && ind1.Name == ind2.Name {
+		body := astToStr(ifn)
+		n := float64(strings.Count(body, astToStr(vars)))
+		body = strings.Replace(body, astToStr(vars), "", -1)
+		body = strings.Replace(body, "(", "", -1)
+		body = strings.Replace(body, ")", "", -1)
+		body = strings.Replace(body, "*", "", -1)
+		body = strings.TrimSpace(body)
+
+		if body == "" {
 			power := &goast.CallExpr{
 				Fun: goast.NewIdent("pow"),
 				Args: []goast.Expr{
@@ -1735,27 +1740,94 @@ func (s *sm) swap(left, right goast.Expr) bool {
 }
 
 func (s *sm) sortIdentMul(a goast.Expr) (changed bool, r goast.Expr, _ error) {
-	v, ok := a.(*goast.BinaryExpr)
+	main, ok := a.(*goast.BinaryExpr)
 	if !ok {
 		return false, nil, nil
 	}
-	if v.Op != token.MUL {
+	if main.Op != token.MUL {
 		return false, nil, nil
 	}
 
-	if !s.swap(v.X, v.Y) {
-		return false, nil, nil
+	if s.swap(main.X, main.Y) {
+		// from :
+		// (b*a)
+		// to :
+		// (a*b)
+		return true, &goast.BinaryExpr{
+			X:  main.Y,
+			Op: token.MUL,
+			Y:  main.X,
+		}, nil
 	}
 
-	// from :
-	// (b*a)
-	// to :
-	// (a*b)
-	return true, &goast.BinaryExpr{
-		X:  v.Y,
-		Op: token.MUL,
-		Y:  v.X,
-	}, nil
+	fok := func(e goast.Expr) bool {
+		if ok, _ := isConstant(e); ok {
+			return true
+		}
+		if ind, ok := e.(*goast.Ident); ok {
+			if ok := s.isConstant(ind.Name); ok {
+				return true
+			}
+		}
+		return false
+	}
+
+	if left, ok := main.X.(*goast.BinaryExpr); ok && left.Op == token.MUL {
+		if right, ok := main.Y.(*goast.BinaryExpr); ok && right.Op == token.MUL {
+			//
+			// from:
+			//  left         right   //
+			// ( a * x ) * ( a * x ) //
+			// to:
+			// ( a * a ) * ( x * x ) //
+			//
+			var (
+				okLL = fok(left.X)
+				okLR = fok(left.Y)
+				okRL = fok(right.X)
+			)
+			if okLL && !okLR && okRL {
+				left.Y, right.X = right.X, left.Y
+			}
+		}
+	}
+	// from:
+	// x*(a*(...))
+	// to:
+	// a*(x*(...))
+	if !fok(main.X) {
+		if right, ok := main.Y.(*goast.BinaryExpr); ok && right.Op == token.MUL {
+			if fok(right.X) {
+				main.X, right.X = right.X, main.X
+				return true, main, nil
+			}
+		}
+	}
+
+	if left, ok := main.X.(*goast.BinaryExpr); ok && left.Op == token.MUL {
+		if right, ok := main.Y.(*goast.BinaryExpr); ok && right.Op == token.MUL {
+			//
+			// from:
+			//  left         right    //
+			// ( a * x ) * ( a * x )  //
+			// to:
+			// (a * ( x * ( a * x ))) //
+			//
+			return true, &goast.ParenExpr{
+				X: &goast.BinaryExpr{
+					X:  left.X,
+					Op: token.MUL,
+					Y: &goast.BinaryExpr{
+						X:  left.Y,
+						Op: token.MUL,
+						Y:  right,
+					},
+				},
+			}, nil
+		}
+	}
+
+	return false, nil, nil
 }
 
 func (s *sm) constants(a goast.Expr) (changed bool, r goast.Expr, _ error) {
@@ -1895,31 +1967,28 @@ func atos(node goast.Node) string {
 	var str string
 	str += fmt.Sprint("==== START OF AST tree ====\n")
 	str += out.String()
-	str += typesTree(node)
-	str += fmt.Sprint("==== END OF AST tree ====\n")
-	return str
-}
-
-// TypesTree - return tree of types for AST node
-func typesTree(node goast.Node) (str string) {
-	var typesTree2 func(node goast.Node, depth int) (str string)
-	typesTree2 = func(node goast.Node, depth int) (str string) {
-		if node == (goast.Node)(nil) {
-			return ""
-		}
-		for i := 0; i < depth; i++ {
-			str += "\t"
-		}
-		str += fmt.Sprintf("%T\n", node)
-		depth++
-		if call, ok := node.(*goast.CallExpr); ok {
-			for _, n := range call.Args {
-				str += typesTree2(n, depth)
+	str += func(node goast.Node) (str string) {
+		var typesTree2 func(node goast.Node, depth int) (str string)
+		typesTree2 = func(node goast.Node, depth int) (str string) {
+			if node == (goast.Node)(nil) {
+				return ""
 			}
+			for i := 0; i < depth; i++ {
+				str += "\t"
+			}
+			str += fmt.Sprintf("%T\n", node)
+			depth++
+			if call, ok := node.(*goast.CallExpr); ok {
+				for _, n := range call.Args {
+					str += typesTree2(n, depth)
+				}
+			}
+			return str
 		}
+		str += fmt.Sprintf("\nTypes tree:\n")
+		str += typesTree2(node, 0)
 		return str
-	}
-	str += fmt.Sprintf("\nTypes tree:\n")
-	str += typesTree2(node, 0)
+	}(node)
+	str += fmt.Sprint("==== END OF AST tree ====\n")
 	return str
 }
