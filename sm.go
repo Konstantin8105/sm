@@ -2,7 +2,6 @@ package sm
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"go/parser"
 	"go/printer"
@@ -23,6 +22,9 @@ const (
 	transpose    = "transpose"
 	integralName = "integral"
 	injectName   = "inject"
+	sinName      = "sin"
+	cosName      = "cos"
+	tanName      = "tan"
 )
 
 type sm struct {
@@ -47,15 +49,24 @@ func (s sm) isConstant(e goast.Expr) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
-func (s sm) isVariable(name string) bool {
+func (s sm) isVariable(e goast.Expr) bool {
+	var name string
+	if ind, ok := e.(*goast.Ident); ok {
+		name = ind.Name
+	} else {
+		return false
+	}
+
 	for i := range s.vars {
 		if s.vars[i] == name {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -256,28 +267,16 @@ func Sexpr(o io.Writer, expr string) (out string, err error) {
 	return
 }
 
-func astToStr(a goast.Expr) string {
-	// fmt.Println(atos(a))
+func astToStr(e goast.Expr) string {
+	// goast.Print(token.NewFileSet(), e)
 	var buf bytes.Buffer
-	printer.Fprint(&buf, token.NewFileSet(), a)
+	printer.Fprint(&buf, token.NewFileSet(), e)
 	return buf.String()
 }
 
 var counter int
 
 func (s *sm) walk(a goast.Expr) (c bool, _ goast.Expr, _ error) {
-	// debug
-	// var buf bytes.Buffer
-	// printer.Fprint(&buf, token.NewFileSet(), a)
-	// fmt.Println(counter, "walk:before: ", buf.String())
-	// counter++
-	// defer func() {
-	// var buf bytes.Buffer
-	// printer.Fprint(&buf, token.NewFileSet(), a)
-	// counter--
-	// fmt.Println(counter, "walk:after : ", buf.String(), c)
-	// }()
-
 	// iteration limit
 	if err := s.iterationLimit(); err != nil {
 		return false, nil, err
@@ -291,7 +290,6 @@ func (s *sm) walk(a goast.Expr) (c bool, _ goast.Expr, _ error) {
 			r       goast.Expr
 			err     error
 		)
-	begin:
 		for numRule, rule := range []func(goast.Expr) (bool, goast.Expr, error){
 			s.constants,             // 00
 			s.constantsLeft,         // 01
@@ -317,9 +315,6 @@ func (s *sm) walk(a goast.Expr) (c bool, _ goast.Expr, _ error) {
 			s.integral,              // 21
 			s.inject,                // 22
 		} {
-			// fmt.Println("try rules = ", i)
-			// fmt.Println(s)
-			// fmt.Println(astToStr(a))
 			c, r, err = rule(a)
 			if err != nil {
 				return false, nil, err
@@ -331,7 +326,7 @@ func (s *sm) walk(a goast.Expr) (c bool, _ goast.Expr, _ error) {
 				//		numRule, astToStr(a), astToStr(r))
 				a = r
 				changed = true
-				goto begin
+				break
 			}
 		}
 		if changed {
@@ -689,6 +684,9 @@ func (s *sm) parenParen(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	if !ok {
 		return false, nil, nil
 	}
+	if bin, ok := par.X.(*goast.BinaryExpr); ok {
+		return true, bin, nil
+	}
 	parPar, ok := par.X.(*goast.ParenExpr)
 	if !ok {
 		return false, nil, nil
@@ -870,7 +868,7 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	}
 
 	dvar := id.Name
-	if !s.isVariable(dvar) {
+	if !s.isVariable(id) {
 		return false, nil, s.errorGen(fmt.Errorf(
 			"Second argument of differential is not initialized like variable"+
 				": `%s`", dvar))
@@ -1346,22 +1344,16 @@ func (s *sm) openParenLeft(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	// to:
 	// any * (...)
 	if v.Op == token.MUL {
-		var found bool
-		if par, ok := v.X.(*goast.ParenExpr); ok {
-			if _, ok := par.X.(*goast.BinaryExpr); ok {
-				found = true
-			}
-		} else {
-			if _, ok := v.X.(*goast.BinaryExpr); ok {
-				found = true
+		if _, ok := v.X.(*goast.BinaryExpr); ok {
+			if _, ok := v.Y.(*goast.Ident); ok {
+				v.X, v.Y = v.Y, v.X // swap
+				return true, &goast.BinaryExpr{
+					X:  v.X,
+					Op: token.MUL,
+					Y:  v.Y,
+				}, nil
 			}
 		}
-		if !found {
-			return false, nil, nil
-		}
-
-		v.X, v.Y = v.Y, v.X
-		return s.openParenRight(v)
 	}
 
 	// from:
@@ -2001,7 +1993,7 @@ func createFloat(value interface{}) *goast.BasicLit {
 		}
 		return createFloat(val)
 	}
-	panic(fmt.Errorf("createFloat: %#v",value))
+	panic(fmt.Errorf("createFloat: %#v", value))
 }
 
 func isConstant(node goast.Node) (ok bool, val float64) {
@@ -2081,43 +2073,9 @@ func isTranspose(e goast.Expr) (ok bool) {
 	return true
 }
 
-// atos - ASTree to string
-// Typically using for debug
-func atos(node goast.Node) string {
-	j, err := json.Marshal(node)
-	if err != nil {
-		panic(err)
-	}
-	var out bytes.Buffer
-	err = json.Indent(&out, j, "", "  ")
-	if err != nil {
-		panic(err)
-	}
-	var str string
-	str += fmt.Sprint("==== START OF AST tree ====\n")
-	str += out.String()
-	str += func(node goast.Node) (str string) {
-		var typesTree2 func(node goast.Node, depth int) (str string)
-		typesTree2 = func(node goast.Node, depth int) (str string) {
-			if node == (goast.Node)(nil) {
-				return ""
-			}
-			for i := 0; i < depth; i++ {
-				str += "\t"
-			}
-			str += fmt.Sprintf("%T\n", node)
-			depth++
-			if call, ok := node.(*goast.CallExpr); ok {
-				for _, n := range call.Args {
-					str += typesTree2(n, depth)
-				}
-			}
-			return str
-		}
-		str += fmt.Sprintf("\nTypes tree:\n")
-		str += typesTree2(node, 0)
-		return str
-	}(node)
-	str += fmt.Sprint("==== END OF AST tree ====\n")
-	return str
+func debug(e goast.Expr) {
+	fmt.Println("-------------")
+	fmt.Println(astToStr(e))
+	goast.Print(token.NewFileSet(), e)
+	fmt.Println("-------------")
 }
