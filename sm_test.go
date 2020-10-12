@@ -308,7 +308,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "integral(pow(x,2),x,1,2);variable(x)",
-			out:  "2.334",
+			out:  "2.331",
 		},
 
 		{
@@ -325,7 +325,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "integral(pow(x,2),x,2,3);variable(x)",
-			out:  "6.333",
+			out:  "6.327",
 		},
 		{
 			expr: "integral(pow(x,3),x,2,3);variable(x)",
@@ -337,23 +337,31 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "integral(pow(a*x,2),x,2,3);variable(x);constant(a)",
-			out:  "6.333*(a*a)",
+			out:  "6.327*(a*a)",
 		},
 		{
 			expr: "integral(a*pow(x,2),x,2,3);variable(x);constant(a)",
-			out:  "6.333*a",
+			out:  "6.327*a",
 		},
 		{
 			expr: "integral(a+a*pow(x,2)+pow(x,3)*a,x,2,3);variable(x);constant(a)",
-			out:  "a+6.333*a+16.250*a",
+			out:  "a+6.327*a+16.250*a",
 		},
 		{
 			expr: "integral(pow(x,2),x,2,3);variable(x)",
-			out:  "6.333",
+			out:  "6.327",
 		},
 		{
 			expr: "integral(x*a*x*a*x*a,x,2,3);variable(x);constant(a)",
 			out:  "16.250*(a*(a*a))",
+		},
+		{
+			expr: "integral(-1.000/L*(1.000/L), s, 0.000, 1.000); constant(L)",
+			out:  "-1.000 / L * (1.000 / L)",
+		},
+		{
+			expr: "integral(((sin(q))-(sin(q))*s)/r, s, 0.000, 1.000); constant(q); constant(r)",
+			out:  "",
 		},
 	}
 
@@ -403,4 +411,42 @@ func Example() {
 	// 10.000 - a
 	// 10.000 - a
 	// 10.000 - a
+}
+
+func ExampleSexpr() {
+	eq, err := sm.Sexpr(nil,
+		`integral(
+		transpose(matrix(
+			-1/L,0,0, 
+			(1-s)*sin(q)/r, (1-3*s*s+2*s*s*s)*cos(q)/r, L*(s-2*s*s+s*s*s)*cos(q),
+			0, (6-12*s)/(L*L), (4-6*s)/L,
+			0, (6*s-6*s*s)*sin(q)/(r*L), (-1+4*s-3*s*s)*sin(q)/r,
+			4,3))*
+			matrix( 
+				1, v, 0, 0,
+				v, 1, 0, 0, 
+				0, 0, t*t/12, v*t*t/12,
+				0, 0, v*t*t/12, t*t/12,
+			4,4)
+			*
+			matrix( 
+				1/L,0,0,
+				s*sin(q)/r, (3*s*s-2*s*s*s)*cos(q)/r, L*(-s*s+s*s*s)*cos(q)/r,
+				0, (-6+12*s)/L/L, (2-6*s)/L,
+				0, (-6*s+6*s*s)*sin(q)/r/L, (2*s-3*s*s)*sin(q)/r,
+			4,3) ,
+			s, 0, 1); 
+			variable(s);
+			constant(q);
+			constant(L);
+			constant(v);
+			constant(t);
+			`,
+	)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Fprintf(os.Stdout, "%s\n", eq)
+	fmt.Fprintf(os.Stdout, "integral = %d\n", strings.Count(eq, "integral"))
+	// Output:
 }
