@@ -459,8 +459,6 @@ func (s *sm) matrixTranspose(e goast.Expr) (changed bool, r goast.Expr, _ error)
 		panic("not valid transpose matrix")
 	}
 
-
-
 	// transpose
 	var trans m
 	trans.args = make([]goast.Expr, len(mt.args))
@@ -778,7 +776,7 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	// to:
 	// (number1 - number2) + (...)
 	return true, &goast.BinaryExpr{
-		X: createFloat(v1 -v2),
+		X:  createFloat(v1 - v2),
 		Op: token.ADD,
 		Y:  leftBin.Y,
 	}, nil
@@ -1233,15 +1231,18 @@ func (s *sm) openParenRight(a goast.Expr) (changed bool, r goast.Expr, _ error) 
 	var Op token.Token
 	b1, ok1 := bin.X.(*goast.BinaryExpr)
 	b2, ok2 := bin.Y.(*goast.BinaryExpr)
-	if (ok1 && ok2) || (!ok1 && !ok2) {
-		return false, nil, nil
+	ispm := func(t token.Token) bool {
+		return t == token.ADD || t == token.SUB
 	}
+	// if (ok1 && ok2) || (!ok1 && !ok2) {
+	// 	return false, nil, nil
+	// }
 	found := false
-	if ok2 && (b2.Op == token.ADD || b2.Op == token.SUB) {
+	if ok2 && ispm(b2.Op) && (ok1 && !ispm(b1.Op) || !ok1) {
 		any, L, R, Op = bin.X, b2.X, b2.Y, b2.Op
 		found = true
 	}
-	if ok1 && (b1.Op == token.ADD || b1.Op == token.SUB) {
+	if ok1 && ispm(b1.Op) && (ok2 && !ispm(b2.Op) || !ok2) {
 		any, L, R, Op = bin.Y, b1.X, b1.Y, b1.Op
 		found = true
 	}
@@ -1399,6 +1400,11 @@ func (s *sm) zeroValueMul(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 	// any * zero
 	// zero * any
 	if bin.Op == token.MUL && (isZero(bin.X) || isZero(bin.Y)) {
+		return true, createFloat(0.0), nil
+	}
+
+	// zero / any
+	if bin.Op == token.QUO && isZero(bin.X) {
 		return true, createFloat(0.0), nil
 	}
 
@@ -1805,9 +1811,9 @@ func (s *sm) mulConstToMatrix(a goast.Expr) (changed bool, r goast.Expr, _ error
 
 	for i := 0; i < len(mt.args); i++ {
 		mt.args[i] = &goast.BinaryExpr{
-			X:  &goast.ParenExpr{X: mt.args[i]},
+			X:  mt.args[i],
 			Op: token.MUL, // *
-			Y:  &goast.ParenExpr{X: v.X},
+			Y:  v.X,
 		}
 	}
 

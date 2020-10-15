@@ -364,7 +364,7 @@ func Test(t *testing.T) {
 			out:  "1.000/r*sin(q) - 0.500/r*sin(q)",
 		},
 		{
-			expr: "integral((v*(-1.000/L)+(1.000-s)*sin(q)/r)*(1.000/L), s, 0.000, 1.000)",
+			expr: "integral((v*(-1.000/L)+(1.000-s)*sin(q)/r)*(1.000/L), s, 0.000, 1.000); constant(L); constant(q); constant(r);constant(v)",
 			out:  "",
 		},
 	}
