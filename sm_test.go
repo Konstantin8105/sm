@@ -51,6 +51,14 @@ func Test(t *testing.T) {
 			out:  "5.000*b + 8.000*(a*b)",
 		},
 		{
+			expr: "(a + b) * (c - d)",
+			out:  "a*c - a*d + b*c - b*d",
+		},
+		{
+			expr: "(a + b) * (c - d - s)",
+			out:  "a*c - a*d - a*s + b*c - b*d - b*s",
+		},
+		{
 			expr: "b*(2+3-1+8*a)",
 			out:  "4.000*b + 8.000*(a*b)",
 		},
@@ -364,8 +372,24 @@ func Test(t *testing.T) {
 			out:  "1.000/r*sin(q) - 0.500/r*sin(q)",
 		},
 		{
-			expr: "integral((v*(-1.000/L)+(1.000-s)*sin(q)/r)*(1.000/L), s, 0.000, 1.000); constant(L); constant(q); constant(r);constant(v)",
+			expr: "integral((v*(-1.000/L)+(1.000-s)*sin(q)/r)*(1.000/L), s, 0.000, 1.000); constant(L); constant(q); constant(r);constant(v);",
 			out:  "",
+		},
+		{
+			expr: `integral(transpose(matrix(a*s,1,1))*matrix(b*s,1,1)*matrix(c*s,1,1),s, 1, 2);variable(s);constant(a);constant(b);constant(c)`,
+			out:  "",
+		},
+		{
+			expr: "integral((2.000*(sin(q)*s)-3.000*(sin(q)*(s*s)))/r*(1.000/L), s, 0.000, 1.000);constant(q);constant(r);constant(L);",
+			out:"",
+		},
+		{
+			expr:" integral(s*(6.000/L*(s*(1.000/L))), s, 0.000, 1.000); constant(L);",
+			out:"",
+		},
+		{
+			expr:"integral(1.000/L*(-1.000/L)+v*(1.000/L*((sin(q)-sin(q)*s)/r)), s, 0.000, 1.000);constant(L,v,a,r); variable(s)",
+			out:"",
 		},
 	}
 
@@ -424,7 +448,7 @@ func Example() {
 }
 
 func ExampleSexpr() {
-	eq, err := sm.Sexpr(nil,
+	eq, err := sm.Sexpr(os.Stdout, // nil,
 		`integral(
 		transpose(matrix(
 			-1/L,0,0, 

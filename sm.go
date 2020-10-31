@@ -2,6 +2,7 @@ package sm
 
 import (
 	"bytes"
+	"container/list"
 	"fmt"
 	"go/parser"
 	"go/printer"
@@ -117,7 +118,7 @@ func (s sm) errorGen(e error) error {
 }
 
 func (s sm) iterationLimit() error {
-	var maxIteration int64 = 10000000
+	var maxIteration int64 = 1000000
 	if s.iter > maxIteration {
 		return s.errorGen(fmt.Errorf("iteration limit"))
 	}
@@ -196,13 +197,12 @@ func Sexpr(o io.Writer, expr string) (out string, err error) {
 				s.funs = append(s.funs, f)
 				continue
 			case "constant":
-				if len(call.Args) != 1 {
-					return "", s.errorGen(fmt.Errorf("constants have only one argument - name of constant"))
-				}
-				if id, ok := call.Args[0].(*goast.Ident); ok {
-					s.cons = append(s.cons, id.Name)
-				} else {
-					return "", s.errorGen(fmt.Errorf("not valid name of constant"))
+				for i := range call.Args {
+					if id, ok := call.Args[i].(*goast.Ident); ok {
+						s.cons = append(s.cons, id.Name)
+					} else {
+						return "", s.errorGen(fmt.Errorf("not valid name of constant"))
+					}
 				}
 				continue
 			case "variable":
@@ -241,6 +241,7 @@ func Sexpr(o io.Writer, expr string) (out string, err error) {
 		return
 	}
 
+	l := list.New()
 	var changed bool
 	for {
 		changed, a, err = s.walk(a)
@@ -248,7 +249,17 @@ func Sexpr(o io.Writer, expr string) (out string, err error) {
 			return "", err
 		}
 
-		fmt.Fprintf(o, "%s\n", astToStr(a))
+		str := astToStr(a)
+		fmt.Fprintf(o, "%s\n", str)
+		if changed {
+			for e := l.Front(); e != nil; e = e.Next() {
+				listStr := e.Value.(string)
+				if listStr == str {
+					return "", fmt.Errorf("Repeat result: %s", str)
+				}
+			}
+		}
+		l.PushBack(str)
 
 		if !changed {
 			break
@@ -256,11 +267,9 @@ func Sexpr(o io.Writer, expr string) (out string, err error) {
 		if err := s.iterationLimit(); err != nil {
 			return "", err
 		}
+
 		s.iter++
 	}
-
-	// debug
-	// goast.Print(token.NewFileSet(), a)
 
 	out = astToStr(a)
 
@@ -268,74 +277,12 @@ func Sexpr(o io.Writer, expr string) (out string, err error) {
 }
 
 func astToStr(e goast.Expr) string {
-	// goast.Print(token.NewFileSet(), e)
 	var buf bytes.Buffer
 	printer.Fprint(&buf, token.NewFileSet(), e)
 	return buf.String()
 }
 
-var counter int
-
-func (s *sm) walk(a goast.Expr) (c bool, _ goast.Expr, _ error) {
-	// iteration limit
-	if err := s.iterationLimit(); err != nil {
-		return false, nil, err
-	}
-	s.iter++
-
-	// try simplification
-	{
-		var (
-			changed bool
-			r       goast.Expr
-			err     error
-		)
-		for numRule, rule := range []func(goast.Expr) (bool, goast.Expr, error){
-			s.constants,             // 00
-			s.constantsLeft,         // 01
-			s.constantsLeftLeft,     // 02
-			s.openParenLeft,         // 03
-			s.openParenRight,        // 04
-			s.openParen,             // 05
-			s.openParenSingleNumber, // 06
-			s.openParenSingleIdent,  // 07
-			s.sortIdentMul,          // 08
-			s.functionPow,           // 09
-			s.oneMul,                // 10
-			s.binaryNumber,          // 11
-			s.parenParen,            // 12
-			s.binaryUnary,           // 13
-			s.zeroValueMul,          // 14
-			s.differential,          // 15
-			s.divideDivide,          // 16
-			s.divide,                // 17
-			s.matrixMultiply,        // 18
-			s.matrixTranspose,       // 19
-			s.mulConstToMatrix,      // 20
-			s.integral,              // 21
-			s.inject,                // 22
-		} {
-			c, r, err = rule(a)
-			if err != nil {
-				return false, nil, err
-			}
-			if c {
-				_ = numRule
-				// debug
-				//	fmt.Printf("rules = %3d\tfrom: `%s` to `%s`\n",
-				//		numRule, astToStr(a), astToStr(r))
-				//	debug(r)
-				a = r
-				changed = true
-				break
-			}
-		}
-		if changed {
-			return changed, a, nil
-		}
-	}
-
-	// go deeper
+func (s *sm) deeper(a goast.Expr) (c bool, _ goast.Expr, _ error) {
 	switch v := a.(type) {
 	case *goast.BinaryExpr:
 		cX, rX, err := s.walk(v.X)
@@ -403,9 +350,107 @@ func (s *sm) walk(a goast.Expr) (c bool, _ goast.Expr, _ error) {
 	default:
 		panic(fmt.Errorf("Add implementation for type %T", a))
 	}
-
 	// all is not changed
 	return false, a, nil
+}
+
+var counter int
+
+func (s *sm) walk(a goast.Expr) (c bool, result goast.Expr, _ error) {
+	// iteration limit
+	if err := s.iterationLimit(); err != nil {
+		return false, nil, err
+	}
+	s.iter++
+	{ // compare the true changes
+		begin := astToStr(a)
+		defer func() {
+			end := astToStr(result)
+			if begin == end {
+				c = false
+			}
+		}()
+	}
+
+	counter++
+	defer func() {
+		counter--
+	}()
+	//	if counter == 1 {
+	//		fmt.Println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>", s.iter)
+	//		defer func() {
+	//			fmt.Println(counter, astToStr(a))
+	//		}()
+	//	}
+	//	fmt.Println("IN :",counter, astToStr(a))
+	//	defer func(){
+	//		fmt.Println("OUT:",counter, astToStr(result))
+	//	}()
+
+	// c , k, _ := s.openParen(a)
+	// if c {
+	// 	a = k
+	// }
+
+	// try simplification
+	{
+		var (
+			changed bool
+			r       goast.Expr
+			err     error
+		)
+		for numRule, rule := range []func(goast.Expr) (bool, goast.Expr, error){
+			s.deeper,                // 00
+			s.constants,             // 01
+			s.constantsLeft,         // 02
+			s.constantsLeftLeft,     // 03
+			s.openParenLeft,         // 04
+			s.openParenRight,        // 05
+			s.openParen,             // 06
+			s.openParenSingleNumber, // 07
+			s.openParenSingleIdent,  // 08
+			s.sortIdentMul,          // 09
+			s.functionPow,           // 10
+			s.oneMul,                // 11
+			s.binaryNumber,          // 12
+			s.parenParen,            // 13
+			s.binaryUnary,           // 14
+			s.zeroValueMul,          // 15
+			s.differential,          // 16
+			s.divideDivide,          // 17
+			s.divide,                // 18
+			s.matrixMultiply,        // 19
+			s.matrixTranspose,       // 20
+			s.mulConstToMatrix,      // 21
+			s.integral,              // 22
+			s.inject,                // 23
+		} {
+			c, r, err = rule(a)
+			if err != nil {
+				return false, nil, err
+			}
+			if c { //&& astToStr(a) != astToStr(r) {
+				_ = numRule
+				// debug
+				//	fmt.Printf("rules = %3d\tfrom: `%s` to `%s`\n",
+				//		numRule, astToStr(a), astToStr(r))
+				//	debug(r)
+				//			a = r
+				a, err = parser.ParseExpr(astToStr(r))
+				if err != nil {
+					return
+				}
+				changed = true
+				break
+			}
+		}
+		if changed {
+			return changed, a, nil
+		}
+	}
+
+	// return false, nil, nil
+	return s.deeper(a)
 }
 
 func (s *sm) inject(e goast.Expr) (changed bool, r goast.Expr, _ error) {
@@ -689,20 +734,20 @@ func (s *sm) parenParen(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	if !ok {
 		return false, nil, nil
 	}
-	return true, par.X, nil
-	//	if bin, ok := par.X.(*goast.BinaryExpr); ok {
-	//		return true, bin, nil
-	//	}
-	//	parPar, ok := par.X.(*goast.ParenExpr)
-	//	if !ok {
-	//		return false, nil, nil
-	//	}
-	//
-	//	// from :
-	//	// (( ... ))
-	//	// to :
-	//	// (...)
-	//	return true, parPar, nil
+	// return true, par.X, nil
+	if bin, ok := par.X.(*goast.BinaryExpr); ok {
+		return true, bin, nil
+	}
+	parPar, ok := par.X.(*goast.ParenExpr)
+	if !ok {
+		return false, nil, nil
+	}
+
+	// from :
+	// (( ... ))
+	// to :
+	// (...)
+	return true, parPar, nil
 }
 
 func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
@@ -1789,44 +1834,45 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 }
 
 func (s *sm) mulConstToMatrix(a goast.Expr) (changed bool, r goast.Expr, _ error) {
-	v, ok := a.(*goast.BinaryExpr)
-	if !ok {
-		return false, nil, nil
-	}
-	if v.Op != token.MUL {
-		return false, nil, nil
-	}
-	_, ok = isMatrix(v.X)
-	if ok {
-		return false, nil, nil
-	}
-	ok = isTranspose(v.X)
-	if ok {
-		return false, nil, nil
-	}
-	mt, ok := isMatrix(v.Y)
-	if !ok {
-		return false, nil, nil
-	}
-
-	for i := 0; i < len(mt.args); i++ {
-		mt.args[i] = &goast.BinaryExpr{
-			X:  mt.args[i],
-			Op: token.MUL, // *
-			Y:  v.X,
-		}
-	}
-
-	result := &goast.CallExpr{
-		Fun:  goast.NewIdent(matrix),
-		Args: mt.args,
-	}
-	// rows
-	result.Args = append(result.Args, createFloat(fmt.Sprintf("%d", mt.rows)))
-	// columns
-	result.Args = append(result.Args, createFloat(fmt.Sprintf("%d", mt.columns)))
-
-	return true, result, nil
+	return false, nil, nil
+	// 	v, ok := a.(*goast.BinaryExpr)
+	// 	if !ok {
+	// 		return false, nil, nil
+	// 	}
+	// 	if v.Op != token.MUL {
+	// 		return false, nil, nil
+	// 	}
+	// 	_, ok = isMatrix(v.X)
+	// 	if ok {
+	// 		return false, nil, nil
+	// 	}
+	// 	ok = isTranspose(v.X)
+	// 	if ok {
+	// 		return false, nil, nil
+	// 	}
+	// 	mt, ok := isMatrix(v.Y)
+	// 	if !ok {
+	// 		return false, nil, nil
+	// 	}
+	//
+	// 	for i := 0; i < len(mt.args); i++ {
+	// 		mt.args[i] = &goast.BinaryExpr{
+	// 			X:  mt.args[i],
+	// 			Op: token.MUL, // *
+	// 			Y:  v.X,
+	// 		}
+	// 	}
+	//
+	// 	result := &goast.CallExpr{
+	// 		Fun:  goast.NewIdent(matrix),
+	// 		Args: mt.args,
+	// 	}
+	// 	// rows
+	// 	result.Args = append(result.Args, createFloat(fmt.Sprintf("%d", mt.rows)))
+	// 	// columns
+	// 	result.Args = append(result.Args, createFloat(fmt.Sprintf("%d", mt.columns)))
+	//
+	// 	return true, result, nil
 }
 
 func (s *sm) swap(left, right goast.Expr) bool {
@@ -1834,8 +1880,6 @@ func (s *sm) swap(left, right goast.Expr) bool {
 	//	constant
 	//	function
 	//	matrix
-	var swap bool
-
 	for _, fb := range []func() bool{
 		func() (b bool) {
 			if ok, _ := isNumber(left); ok {
@@ -1855,6 +1899,12 @@ func (s *sm) swap(left, right goast.Expr) bool {
 			if !ok {
 				return
 			}
+			if !s.isConstant(x) {
+				return
+			}
+			if !s.isConstant(y) {
+				return
+			}
 			if 0 < strings.Compare(x.Name, y.Name) {
 				b = true
 			}
@@ -1869,10 +1919,95 @@ func (s *sm) swap(left, right goast.Expr) bool {
 			}
 			return true
 		},
+		func() (b bool) {
+			// (s * L); constant(L);
+			if ok, _ := isNumber(left); ok {
+				return
+			}
+			if ok := s.isConstant(left); ok {
+				return
+			}
+			if _, ok := left.(*goast.Ident); !ok {
+				return
+			}
+
+			if ok, _ := isNumber(right); !(ok || s.isConstant(right)) {
+				return
+			}
+			return true
+		},
+		func() (b bool) {
+			// (s * 1/L); constant(L);
+			if ok, _ := isNumber(left); ok {
+				return
+			}
+			if ok := s.isConstant(left); ok {
+				return
+			}
+			if _, ok := left.(*goast.Ident); !ok {
+				return
+			}
+
+			bin, ok := right.(*goast.BinaryExpr)
+			if !ok {
+				return
+			}
+			if bin.Op != token.QUO {
+				return
+			}
+
+			if ok, _ := isNumber(bin.X); !(ok || s.isConstant(bin.X)) {
+				return
+			}
+			if !s.isConstant(bin.Y) {
+				return
+			}
+
+			return true
+		},
+		func() (b bool) {
+			// s * (number/L * ...); constant(L)
+			if ok, _ := isNumber(left); ok {
+				return
+			}
+			if ok := s.isConstant(left); ok {
+				return
+			}
+			if _, ok := left.(*goast.Ident); !ok {
+				return
+			}
+
+			rbin, ok := right.(*goast.BinaryExpr)
+			if !ok {
+				return
+			}
+			if rbin.Op != token.MUL {
+				return
+			}
+
+			bin, ok := rbin.X.(*goast.BinaryExpr)
+			if !ok {
+				return
+			}
+			if bin.Op != token.QUO {
+				return
+			}
+
+			if ok, _ := isNumber(bin.X); !(ok || s.isConstant(bin.X)) {
+				return
+			}
+			if !s.isConstant(bin.Y) {
+				return
+			}
+
+			return true
+		},
 	} {
-		swap = swap || fb()
+		if fb() {
+			return true
+		}
 	}
-	return swap
+	return false
 }
 
 func (s *sm) sortIdentMul(a goast.Expr) (changed bool, r goast.Expr, _ error) {
@@ -2058,11 +2193,20 @@ func createFloat(value interface{}) *goast.BasicLit {
 }
 
 func isNumber(node goast.Node) (ok bool, val float64) {
+	unary := 1.0
+	if un, ok := node.(*goast.UnaryExpr); ok {
+		if un.Op == token.SUB {
+			unary = -1.0
+			node = un.X
+		} else {
+			return false, 0.0
+		}
+	}
 	if x, ok := node.(*goast.BasicLit); ok {
 		if x.Kind == token.INT || x.Kind == token.FLOAT {
 			val, err := strconv.ParseFloat(x.Value, 64)
 			if err == nil {
-				return true, val
+				return true, unary * val
 			}
 			panic(err)
 		}
@@ -2094,6 +2238,7 @@ func isMatrix(e goast.Expr) (mt *m, ok bool) {
 	mt = new(m)
 	if len(call.Args) < 3 {
 		panic(fmt.Errorf("matrix is not valid: %#v\n%s", call, astToStr(call)))
+		//fmt.Println(fmt.Errorf("Error : matrix is not valid: %#v\n%s", call, astToStr(call)))
 		//return
 	}
 	mt.args = call.Args[:len(call.Args)-2]
