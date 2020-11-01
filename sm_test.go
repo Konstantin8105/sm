@@ -18,7 +18,10 @@ func Test(t *testing.T) {
 			expr: "1+2",
 			out:  "3.000",
 		}, {
-			expr: "2*(9+3)",
+			expr: "2*((((9.01)+3)))",
+			out:  "24.020",
+		}, {
+			expr: "2*((((9)+3)))",
 			out:  "24.000",
 		}, {
 			expr: "(9+3)*2",
@@ -33,37 +36,40 @@ func Test(t *testing.T) {
 			expr: "a*(2+8)*a",
 			out:  "10.000 * (a * a)",
 		}, {
+			expr: "((a))*(((2+8)))*(a)",
+			out:  "10.000 * (a * a)",
+		}, {
 			expr: "(2+8)*a",
 			out:  "10.000 * a",
 		}, {
 			expr: "(2+8*a)*a",
 			out:  "2.000*a + 8.000*(a*a)",
 		}, {
-			expr: "b*(2+8*a)*a",
+			expr: "b*(2+8*a)*a; constant(a); constant(b)",
 			out:  "2.000*(a*b) + 8.000*(a*(a*b))",
 		},
 		{
-			expr: "b*(2+8*a)",
+			expr: "b*(2+8*a); constant(a); constant(b)",
 			out:  "2.000*b + 8.000*(a*b)",
 		},
 		{
-			expr: "b*(2+3+8*a)",
+			expr: "b*(2+3+8*a); constant(a); constant(b)",
 			out:  "5.000*b + 8.000*(a*b)",
 		},
 		{
-			expr: "(a + b) * (c - d)",
-			out:  "a*c - a*d + b*c - b*d",
+			expr: "(a + b) * (c - d); constant(a,b,c,d)",
+			out:  "a*c - a*d + (b*c - b*d)",
 		},
 		{
-			expr: "(a + b) * (c - d - s)",
-			out:  "a*c - a*d - a*s + b*c - b*d - b*s",
+			expr: "(a + b) * (c - d - s); constant(a,b,c,d,s)",
+			out:  "a*c - a*d - a*s + (b*c - b*d - b*s)",
 		},
 		{
-			expr: "b*(2+3-1+8*a)",
+			expr: "b*(2+3-1+8*a); constant(a,b)",
 			out:  "4.000*b + 8.000*(a*b)",
 		},
 		{
-			expr: "b/(2+3-1+a*8)",
+			expr: "b/(2+3-1+a*8); constant(a,b)",
 			out:  "b / (4.000 + 8.000*a)",
 		},
 		{
@@ -95,7 +101,7 @@ func Test(t *testing.T) {
 			out:  "a + b",
 		},
 		{
-			expr: "pow(a+b,4/2)",
+			expr: "pow(a+b,4/2); constant(a,b)",
 			out:  "a*a + a*b + (a*b + b*b)",
 		},
 		{
@@ -107,7 +113,7 @@ func Test(t *testing.T) {
 			out:  "1.000",
 		},
 		{
-			expr: "-1+(-a)+(+5)+(+2+3+1)",
+			expr: "-1+(-a)+(+5)+(+2+3+1); constant(a)",
 			out:  "10.000 - a",
 		},
 		{
@@ -118,7 +124,7 @@ func Test(t *testing.T) {
 			out: "pow(2.000, 0.062)",
 		},
 		{
-			expr: "pow(9,9)*4*(-3+3)*0+12.3*0-wer*0-0*wed",
+			expr: "pow(9,9)*4*(-3+3)*0+12.3*0-wer*0-0*wed; constant(wer,wed)",
 			out:  "0.000",
 		},
 
@@ -381,15 +387,19 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "integral((2.000*(sin(q)*s)-3.000*(sin(q)*(s*s)))/r*(1.000/L), s, 0.000, 1.000);constant(q);constant(r);constant(L);",
-			out:"",
+			out:  "",
 		},
 		{
-			expr:" integral(s*(6.000/L*(s*(1.000/L))), s, 0.000, 1.000); constant(L);",
-			out:"",
+			expr: " integral(s*(6.000/L*(s*(1.000/L))), s, 0.000, 1.000); constant(L);",
+			out:  "",
 		},
 		{
-			expr:"integral(1.000/L*(-1.000/L)+v*(1.000/L*((sin(q)-sin(q)*s)/r)), s, 0.000, 1.000);constant(L,v,a,r); variable(s)",
-			out:"",
+			expr: "integral(1.000/L*(-1.000/L)+v*(1.000/L*((sin(q)-sin(q)*s)/r)), s, 0.000, 1.000);constant(L,v,a,q,r); variable(s)",
+			out:  "",
+		},
+		{
+			expr: "integral((sin(q)-sin(q)*s)/r*(1.000/L), s, 0.000, 1.000); constant(q,r)",
+			out: "",
 		},
 	}
 
@@ -409,6 +419,9 @@ func Test(t *testing.T) {
 			}
 			act = strings.Replace(act, " ", "", -1)
 			ec := strings.Replace(tcs[i].out, " ", "", -1)
+			if strings.Contains(act, "integral") {
+				t.Errorf("found: %s", "integral")
+			}
 			if act != ec {
 				t.Fatalf("Is not same '%s' != '%s'", act, tcs[i].out)
 			}
@@ -423,25 +436,18 @@ func Example() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Fprintf(os.Stdout, "\nOutput : %s\n", eq)
+	fmt.Fprintf(os.Stdout, "Output : %s\n", eq)
 	// Output:
 	// Input : -1+(-a)+(+5)+(+2+3+1)
 	//
-	// -1 + (-a) + 5 + (+2 + 3 + 1)
-	// 5 + (-1 + (-a)) + (+2 + 3 + 1)
-	// 5.000 + (-1 + (-a)) + (+2 + 3 + 1)
-	// 5.000 + (-1 - a) + (+2 + 3 + 1)
-	// 5.000 + (-1.000 - a) + (+2 + 3 + 1)
-	// 4.000 - a + (+2 + 3 + 1)
-	// 4.000 - a + (+2 + 3 + 1)
-	// 4.000 - a + (1 + (+2 + 3))
-	// 4.000 - a + (1.000 + (+2 + 3))
-	// 4.000 - a + (1.000 + (3 + +2))
-	// 4.000 - a + (4.000 + +2)
-	// 4.000 - a + (4.000 + 2)
+	// -1.000 - a + 5.000 + (2.000 + 3 + 1)
+	// 5.000 + (-1.000 - a) + (2.000 + 3 + 1)
+	// 4.000 - a + (2.000 + 3 + 1)
+	// 4.000 - a + (2.000 + 3.000 + 1)
+	// 4.000 - a + (5.000 + 1)
+	// 4.000 - a + (5.000 + 1.000)
 	// 4.000 - a + 6.000
 	// 6.000 + (4.000 - a)
-	// 10.000 - a
 	// 10.000 - a
 	//
 	// Output : 10.000 - a
