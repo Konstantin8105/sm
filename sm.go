@@ -2269,12 +2269,17 @@ func (s *sm) constants(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	return true, createFloat(fmt.Sprintf("%.15e", result)), nil
 }
 
+// FloatFormat is format of float value, for more precision calculation use
+// value equal 12.
+const FloatFormat int = 3
+
 func createFloat(value interface{}) *goast.BasicLit {
 	switch v := value.(type) {
 	case float64:
+		format := fmt.Sprintf("%%.%df",FloatFormat)
 		return &goast.BasicLit{
 			Kind:  token.FLOAT,
-			Value: fmt.Sprintf("%.3f", v),
+			Value: fmt.Sprintf(format, v),
 		}
 	case int:
 		return createFloat(float64(v))
