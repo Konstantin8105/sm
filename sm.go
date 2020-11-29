@@ -1555,6 +1555,39 @@ func (s *sm) openParenLeft(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		}
 	}
 
+	// from:
+	// number1/any1 * (number2/any2)
+	// number2 != 1.000
+	// to:
+	// (number1*number2) / any1 * (1.000/any2)
+	if v.Op == token.MUL {
+		left,lok := v.X.(*goast.BinaryExpr)
+		right,rok:= v.Y.(*goast.BinaryExpr)
+		if lok && rok && left.Op == token.QUO && right.Op == token.QUO {
+			if ok, _ := isNumber(left.X) ; ok{
+				if ok, value := isNumber(right.X); ok && value != 1.0{
+					return true, &goast.BinaryExpr{
+						X: &goast.BinaryExpr{
+							X: &goast.BinaryExpr{
+								X: left.X,
+								Op:token.MUL,
+								Y: right.X,
+							},
+							Op: token.QUO,
+							Y: left.Y,
+						},
+						Op: token.MUL,
+						Y: &goast.BinaryExpr{
+							X: createFloat("1"),
+							Op: token.QUO,
+							Y: right.Y,
+						},
+					}, nil
+				}
+			}
+		}
+	}
+
 	return false, nil, nil
 }
 
