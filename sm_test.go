@@ -437,6 +437,14 @@ func Test(t *testing.T) {
 			if act != ec {
 				t.Fatalf("Is not same '%s' != '%s'", act, tcs[i].out)
 			}
+
+			// TODO:
+			// check by inject numbers
+			// create list of constants
+			// replace constants into number and get the result
+			// simplify expression
+			// replace constants into number and get the result
+			// comparing diff of results
 		})
 	}
 }
