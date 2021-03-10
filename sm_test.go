@@ -379,7 +379,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "integral((v*(-1.000/L)+(1.000-s)*sin(q)/r)*(1.000/L), s, 0.000, 1.000); constant(L); constant(q); constant(r);constant(v);",
-			out:  "v*(1.000/L*(-1.000/L))+(1.000/L*(sin(q)/r)-1.000/L*(0.500/r*sin(q)))",
+			out:  "v*(-1.000/L*(1.000/L))+(1.000/L*(sin(q)/r)-1.000/L*(0.500/r*sin(q)))",
 		},
 		{
 			expr: `integral(transpose(matrix(a*s,1,1))*matrix(b*s,1,1)*matrix(c*s,1,1),s, 1, 2);variable(s);constant(a);constant(b);constant(c)`,
@@ -391,11 +391,11 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: " integral(s*(6.000/L*(s*(1.000/L))), s, 0.000, 1.000); constant(L);",
-			out:  "6.000/L*(0.333/L)",
+			out:  "1.998/L*(1.000/L)",
 		},
 		{
 			expr: "integral(1.000/L*(-1.000/L)+v*(1.000/L*((sin(q)-sin(q)*s)/r)), s, 0.000, 1.000);constant(L,v,a,q,r); variable(s)",
-			out:  "1.000/L*(-1.000/L)+(v*(1.000/L*(sin(q)/r))-v*(1.000/L*(0.500/r*sin(q))))",
+			out:  "-1.000/L*(1.000/L)+(v*(1.000/L*(sin(q)/r))-v*(1.000/L*(0.500/r*sin(q))))",
 		},
 		{
 			expr: "integral((sin(q)-sin(q)*s)/r*(1.000/L), s, 0.000, 1.000); constant(q,r,L)",
@@ -449,6 +449,10 @@ func Test(t *testing.T) {
 		// 	expr: "inverse(matrix( 1,0,0,0,0,0, 0,0,1,0,0,0, 0,0,0,1,0,0, 1,l,0,0,0,0, 0,0,1,l,l*l,l*l*l, 0,0,0,1,2*l,3*l*l, 6,6));",
 		// 	out:  "",
 		// },
+		{
+			expr: "6.000 / L * (0.333 / L); constant(L)",
+			out: "1.998 / L * (1.000 / L)",
+		},
 	}
 
 	for i := range tcs {
@@ -473,6 +477,14 @@ func Test(t *testing.T) {
 			if act != ec {
 				t.Fatalf("Is not same '%s' != '%s'", act, tcs[i].out)
 			}
+
+			// TODO:
+			// check by inject numbers
+			// create list of constants
+			// replace constants into number and get the result
+			// simplify expression
+			// replace constants into number and get the result
+			// comparing diff of results
 		})
 	}
 }
