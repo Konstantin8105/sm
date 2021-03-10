@@ -21,8 +21,10 @@ const (
 	differential = "d"
 	matrix       = "matrix"
 	transpose    = "transpose"
+	det          = "det"
 	integralName = "integral"
 	injectName   = "inject"
+	inverse      = "inverse"
 	sinName      = "sin"
 	cosName      = "cos"
 	tanName      = "tan"
@@ -117,9 +119,14 @@ func (s sm) errorGen(e error) error {
 	return et
 }
 
+var MaxIteration int64 = 1000000
+
 func (s sm) iterationLimit() error {
-	var maxIteration int64 = 1000000
-	if s.iter > maxIteration {
+	if MaxIteration < 0 {
+		s.iter = 0
+		return nil
+	}
+	if MaxIteration < s.iter {
 		return s.errorGen(fmt.Errorf("iteration limit"))
 	}
 	return nil
@@ -523,8 +530,10 @@ func (s *sm) walk(a goast.Expr) (c bool, result goast.Expr, _ error) {
 			s.differential,
 			s.divideDivide,
 			s.divide,
-			s.matrixMultiply,
 			s.matrixTranspose,
+			s.matrixDet,
+			s.matrixInverse,
+			s.matrixMultiply,
 			s.mulConstToMatrix,
 			s.integral,
 			s.inject,
@@ -548,11 +557,10 @@ func (s *sm) walk(a goast.Expr) (c bool, result goast.Expr, _ error) {
 				return true, a, err
 				// break
 			}
-
 		}
-		// 		if changed {
-		// 			return changed, a, nil
-		// 		}
+		// if changed {
+		//         return changed, a, nil
+		// }
 	}
 
 	return false, nil, nil
@@ -604,7 +612,7 @@ func (s *sm) matrixTranspose(e goast.Expr) (changed bool, r goast.Expr, _ error)
 	if len(call.Args) != 1 {
 		panic("this is impossible")
 	}
-	id.Name = matrix
+	id.Name = "" // TODO : why it is here?
 	mt, ok := isMatrix(call.Args[0])
 	if !ok {
 		panic("not valid transpose matrix")
@@ -621,15 +629,178 @@ func (s *sm) matrixTranspose(e goast.Expr) (changed bool, r goast.Expr, _ error)
 		}
 	}
 
-	result := &goast.CallExpr{
-		Fun:  goast.NewIdent(matrix),
-		Args: trans.args,
-	}
-	// rows
-	result.Args = append(result.Args, createFloat(fmt.Sprintf("%d", trans.rows)))
-	// columns
-	result.Args = append(result.Args, createFloat(fmt.Sprintf("%d", trans.columns)))
+	return true, trans.toAst(), nil
+}
 
+func (s *sm) matrixDet(e goast.Expr) (changed bool, r goast.Expr, _ error) {
+	call, ok := e.(*goast.CallExpr)
+	if !ok {
+		return false, nil, nil
+	}
+	id, ok := call.Fun.(*goast.Ident)
+	if !ok {
+		return false, nil, nil
+	}
+	if id.Name != det {
+		return false, nil, nil
+	}
+	if len(call.Args) != 1 {
+		panic(fmt.Errorf("this is impossible. len = %d", len(call.Args)))
+	}
+	id.Name = "" // TODO : why it is here?
+	mt, ok := isMatrix(call.Args[0])
+	if !ok {
+		panic("not valid det matrix")
+	}
+
+	if mt.columns != mt.rows {
+		panic("not square matrix")
+	}
+
+	// matrix 1x1
+	if mt.columns == 1 && mt.rows == 1 {
+		return true, mt.args[mt.position(0, 0)], nil
+	}
+	size := mt.columns
+
+	// determinant of matrix
+	var dm goast.Expr
+	dm = createFloat(0.0)
+	for i := 0; i < size; i++ {
+		var mat m
+
+		mat.rows = size - 1
+		mat.columns = size - 1
+		mat.args = make([]goast.Expr, mat.columns*mat.rows)
+		for row := 1; row < size; row++ {
+			for c := 0; c < size-1; c++ {
+				col := c
+				if i <= col {
+					col++
+				}
+				mat.args[mat.position(row-1, c)] = mt.args[mt.position(row, col)]
+			}
+		}
+
+		determinant := &goast.CallExpr{
+			Fun:  goast.NewIdent(det),
+			Args: []goast.Expr{mat.toAst()},
+		}
+
+		if i%2 == 0 || i == 0 {
+			dm = &goast.BinaryExpr{
+				X:  dm,
+				Op: token.ADD,
+				Y: &goast.BinaryExpr{
+					X:  mt.args[mt.position(0, i)],
+					Op: token.MUL,
+					Y:  determinant,
+				},
+			}
+		} else {
+			dm = &goast.BinaryExpr{
+				X:  dm,
+				Op: token.SUB,
+				Y: &goast.BinaryExpr{
+					X:  mt.args[mt.position(0, i)],
+					Op: token.MUL,
+					Y:  determinant,
+				},
+			}
+		}
+	}
+
+	return true, dm, nil
+}
+
+func (s *sm) matrixInverse(e goast.Expr) (changed bool, r goast.Expr, _ error) {
+	call, ok := e.(*goast.CallExpr)
+	if !ok {
+		return false, nil, nil
+	}
+	id, ok := call.Fun.(*goast.Ident)
+	if !ok {
+		return false, nil, nil
+	}
+	if id.Name != inverse {
+		return false, nil, nil
+	}
+	if len(call.Args) != 1 {
+		panic("this is impossible")
+	}
+	id.Name = "" // TODO : why it is here?
+	mt, ok := isMatrix(call.Args[0])
+	if !ok {
+		panic("not valid inverse matrix")
+	}
+
+	if mt.columns != mt.rows {
+		panic("not square matrix")
+	}
+	size := mt.columns
+
+	value := &goast.BinaryExpr{
+		X:  createFloat(1.0),
+		Op: token.QUO,
+		Y: &goast.CallExpr{
+			Fun:  goast.NewIdent(det),
+			Args: []goast.Expr{call.Args[0]},
+		},
+	}
+
+	// prepare of matrix
+	var mat m
+	mat.rows = size
+	mat.columns = size
+	mat.args = make([]goast.Expr, mat.columns*mat.rows)
+	for r := 0; r < size; r++ {
+		for c := 0; c < size; c++ {
+			var part m
+			part.rows = size - 1
+			part.columns = size - 1
+			part.args = make([]goast.Expr, part.columns*part.rows)
+			for row := 0; row < size-1; row++ {
+				for col := 0; col < size-1; col++ {
+					row2, col2 := row, col
+					if r <= row2 {
+						row2++
+					}
+					if c <= col2 {
+						col2++
+					}
+					part.args[part.position(row, col)] = mt.args[mt.position(row2, col2)]
+				}
+			}
+			body := append([]goast.Expr{}, part.args...)
+			body = append(body, createFloat(size-1))
+			body = append(body, createFloat(size-1))
+			detm := &goast.CallExpr{
+				Fun:  goast.NewIdent(det),
+				Args: []goast.Expr{part.toAst()},
+			}
+			mat.args[mat.position(r, c)] = detm
+			if (r+c)%2 != 0 {
+				mat.args[mat.position(r, c)] = &goast.ParenExpr{
+					X: &goast.ParenExpr{
+						X: &goast.BinaryExpr{
+							X:  createFloat(-1.0),
+							Op: token.MUL,
+							Y:  mat.args[mat.position(r, c)],
+						},
+					},
+				}
+			}
+		}
+	}
+
+	result := &goast.BinaryExpr{
+		X:  value,
+		Op: token.MUL,
+		Y: &goast.CallExpr{
+			Fun:  goast.NewIdent(transpose),
+			Args: []goast.Expr{mat.toAst()},
+		},
+	}
 	return true, result, nil
 }
 
@@ -840,6 +1011,24 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	if !ok {
 		return false, nil, nil
 	}
+	if bin.Op == token.MUL {
+		// from : (1/l*l)
+		// to   : 1
+		if leftBin, ok := bin.X.(*goast.BinaryExpr); ok && leftBin.Op == token.QUO {
+			if astToStr(bin.Y) == astToStr(leftBin.Y) {
+				return true, leftBin.X, nil
+			}
+		}
+
+		// from : (l *(1/l))
+		// to   : 1
+		if rightBin, ok := bin.Y.(*goast.BinaryExpr); ok && rightBin.Op == token.QUO {
+			if astToStr(bin.X) == astToStr(rightBin.Y) {
+				return true, rightBin.X, nil
+			}
+		}
+	}
+
 	leftBin, ok := bin.Y.(*goast.BinaryExpr)
 	if !ok {
 		return false, nil, nil
@@ -1477,6 +1666,34 @@ func (s *sm) openParenLeft(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		}
 	}
 
+	if v.Op == token.SUB {
+		// from:
+		//	any1 - any1
+		// to:
+		//	2.000 * any1
+		if astToStr(v.X) == astToStr(v.Y) {
+			return true, createFloat(0.000), nil
+		}
+
+		// from:
+		//	any1 - (-number)*any2
+		// to:
+		//	any1 + number * any2
+		if right, ok := v.Y.(*goast.BinaryExpr); ok && right.Op == token.MUL {
+			if ok, val := isNumber(right.X); ok && val < 0.0 {
+				return true, &goast.BinaryExpr{
+					X:  v.X,
+					Op: token.ADD,
+					Y: &goast.BinaryExpr{
+						X:  createFloat(-val),
+						Op: token.MUL,
+						Y:  right.Y,
+					},
+				}, nil
+			}
+		}
+	}
+
 	// 	if v.Op == token.MUL {
 	// 		// from:
 	// 		// (...) * any
@@ -1684,52 +1901,57 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 	if id.Name != integralName {
 		return false, nil, nil
 	}
-
-	ok, from := isNumber(call.Args[len(call.Args)-2])
-	if !ok {
-		return false, nil, nil
+	if len(call.Args) != 4 {
+		panic("not valid integral")
 	}
-	ok, to := isNumber(call.Args[len(call.Args)-1])
-	if !ok {
-		return false, nil, nil
-	}
-	args := call.Args[:len(call.Args)-3]
-	vars := call.Args[len(call.Args)-3]
 
-	if len(args) != 1 {
-		panic(fmt.Errorf("strange len of intergal: %d", len(args)))
-	}
-	ifn := args[0]
+	var (
+		function = call.Args[0]
+		variable = call.Args[1]
+		begin    = call.Args[2]
+		finish   = call.Args[3]
+	)
 
-	if ok, v := isNumber(ifn); ok {
-		switch v {
-		case 0.0:
-			return true, createFloat("0.000"), nil
-
-		case 1.0:
-			return true, &goast.ParenExpr{
-				X: &goast.BinaryExpr{
-					X:  createFloat(fmt.Sprintf("%15e", to)),
-					Op: token.SUB, // -
-					Y:  createFloat(fmt.Sprintf("%15e", from)),
-				},
-			}, nil
-
-		default:
+	// integral(...+...)
+	// integral(...)+integral(...)
+	if bin, ok := function.(*goast.BinaryExpr); ok {
+		if bin.Op == token.ADD || bin.Op == token.SUB {
 			return true, &goast.BinaryExpr{
-				X:  createFloat(fmt.Sprintf("%15e", v)),
-				Op: token.MUL,
+				X: &goast.CallExpr{
+					Fun: goast.NewIdent(integralName),
+					Args: []goast.Expr{
+						bin.X,
+						variable,
+						begin,
+						finish,
+					},
+				},
+				Op: bin.Op,
 				Y: &goast.CallExpr{
 					Fun: goast.NewIdent(integralName),
 					Args: []goast.Expr{
-						createFloat(fmt.Sprintf("%15e", 1.0)),
-						vars,
-						createFloat(fmt.Sprintf("%15e", from)),
-						createFloat(fmt.Sprintf("%15e", to)),
+						bin.Y,
+						variable,
+						begin,
+						finish,
 					},
 				},
 			}, nil
 		}
+	}
+
+	// integral(matrix(...),x,0,1)
+	if mt, ok := isMatrix(function); ok {
+		for i := 0; i < len(mt.args); i++ {
+			mt.args[i] = &goast.CallExpr{
+				Fun: goast.NewIdent(integralName),
+				Args: []goast.Expr{
+					&goast.ParenExpr{X: mt.args[i]},
+					variable, begin, finish,
+				},
+			}
+		}
+		return true, mt.toAst(), nil
 	}
 
 	// extract constansts:
@@ -1779,22 +2001,19 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 		return false
 	}
 
-	if ok := possibleExtract(ifn); ok {
+	if ok := possibleExtract(function); ok {
 		return true, &goast.BinaryExpr{
-			X:  ifn,
+			X:  function,
 			Op: token.MUL,
-			Y: &goast.CallExpr{
-				Fun: goast.NewIdent(integralName),
-				Args: []goast.Expr{
-					createFloat(fmt.Sprintf("%15e", 1.0)),
-					vars,
-					createFloat(fmt.Sprintf("%15e", from)),
-					createFloat(fmt.Sprintf("%15e", to)),
-				},
+			Y: &goast.BinaryExpr{
+				X:  finish,
+				Op: token.SUB,
+				Y:  begin,
 			},
 		}, nil
 	}
-	if bin, ok := ifn.(*goast.BinaryExpr); ok && bin.Op == token.MUL {
+
+	if bin, ok := function.(*goast.BinaryExpr); ok && bin.Op == token.MUL {
 		// from:
 		// integral(a * ...)
 		// to:
@@ -1809,42 +2028,12 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 						Fun: goast.NewIdent(integralName),
 						Args: []goast.Expr{
 							y,
-							vars,
-							createFloat(fmt.Sprintf("%15e", from)),
-							createFloat(fmt.Sprintf("%15e", to)),
+							variable, begin, finish,
 						},
 					},
 				}, nil
 			}
 			x, y = y, x // swap
-		}
-	}
-
-	// integral(...+...)
-	// integral(...)+integral(...)
-	if bin, ok := ifn.(*goast.BinaryExpr); ok {
-		if bin.Op == token.ADD || bin.Op == token.SUB {
-			return true, &goast.BinaryExpr{
-				X: &goast.CallExpr{
-					Fun: goast.NewIdent(integralName),
-					Args: []goast.Expr{
-						bin.X,
-						vars,
-						createFloat(fmt.Sprintf("%15e", from)),
-						createFloat(fmt.Sprintf("%15e", to)),
-					},
-				},
-				Op: bin.Op,
-				Y: &goast.CallExpr{
-					Fun: goast.NewIdent(integralName),
-					Args: []goast.Expr{
-						bin.Y,
-						vars,
-						createFloat(fmt.Sprintf("%15e", from)),
-						createFloat(fmt.Sprintf("%15e", to)),
-					},
-				},
-			}, nil
 		}
 	}
 
@@ -1856,9 +2045,9 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 	// inject(pow(x,1+1)/(1+1), x, 1) - inject(pow(x,1+1)/(1+1), x, 0)
 	//
 	{
-		body := astToStr(ifn)
-		n := float64(strings.Count(body, astToStr(vars)))
-		body = strings.Replace(body, astToStr(vars), "", -1)
+		body := astToStr(function)
+		n := float64(strings.Count(body, astToStr(variable)))
+		body = strings.Replace(body, astToStr(variable), "", -1)
 		body = strings.Replace(body, "(", "", -1)
 		body = strings.Replace(body, ")", "", -1)
 		body = strings.Replace(body, "*", "", -1)
@@ -1868,7 +2057,7 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 			power := &goast.CallExpr{
 				Fun: goast.NewIdent("pow"),
 				Args: []goast.Expr{
-					vars,
+					variable,
 					createFloat(fmt.Sprintf("%15e", n+1.0)),
 				},
 			}
@@ -1883,8 +2072,8 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 						Fun: goast.NewIdent("inject"),
 						Args: []goast.Expr{
 							div,
-							vars,
-							createFloat(fmt.Sprintf("%15e", to)),
+							variable,
+							finish,
 						},
 					},
 					Op: token.SUB,
@@ -1892,8 +2081,8 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 						Fun: goast.NewIdent("inject"),
 						Args: []goast.Expr{
 							div,
-							vars,
-							createFloat(fmt.Sprintf("%15e", from)),
+							variable,
+							begin,
 						},
 					},
 				},
@@ -1901,30 +2090,44 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 		}
 	}
 
-	// integral(matrix(...),x,0,1)
-	if mt, ok := isMatrix(args[0]); ok {
-		// TODO
-		for i := 0; i < len(mt.args); i++ {
-			mt.args[i] = &goast.CallExpr{
-				Fun: goast.NewIdent(integralName),
-				Args: []goast.Expr{
-					&goast.ParenExpr{X: mt.args[i]},
-					vars,
-					createFloat(fmt.Sprintf("%15e", from)),
-					createFloat(fmt.Sprintf("%15e", to)),
-				},
-			}
-		}
-		result := &goast.CallExpr{
-			Fun:  goast.NewIdent(matrix),
-			Args: mt.args,
-		}
-		// rows
-		result.Args = append(result.Args, createFloat(fmt.Sprintf("%d", mt.rows)))
-		// columns
-		result.Args = append(result.Args, createFloat(fmt.Sprintf("%d", mt.columns)))
+	ok, from := isNumber(begin)
+	if !ok {
+		return false, nil, nil
+	}
+	ok, to := isNumber(finish)
+	if !ok {
+		return false, nil, nil
+	}
 
-		return true, result, nil
+	if ok, v := isNumber(function); ok {
+		switch v {
+		case 0.0:
+			return true, createFloat("0.000"), nil
+
+		case 1.0:
+			return true, &goast.ParenExpr{
+				X: &goast.BinaryExpr{
+					X:  createFloat(fmt.Sprintf("%15e", to)),
+					Op: token.SUB, // -
+					Y:  createFloat(fmt.Sprintf("%15e", from)),
+				},
+			}, nil
+
+			//	default:
+			//		return true, &goast.BinaryExpr{
+			//			X:  createFloat(fmt.Sprintf("%15e", v)),
+			//			Op: token.MUL,
+			//			Y: &goast.CallExpr{
+			//				Fun: goast.NewIdent(integralName),
+			//				Args: []goast.Expr{
+			//					createFloat(fmt.Sprintf("%15e", 1.0)),
+			//					variable,
+			//					createFloat(fmt.Sprintf("%15e", from)),
+			//					createFloat(fmt.Sprintf("%15e", to)),
+			//				},
+			//			},
+			//		}, nil
+		}
 	}
 
 	return false, nil, nil
@@ -2276,7 +2479,7 @@ const FloatFormat int = 3
 func createFloat(value interface{}) *goast.BasicLit {
 	switch v := value.(type) {
 	case float64:
-		format := fmt.Sprintf("%%.%df",FloatFormat)
+		format := fmt.Sprintf("%%.%df", FloatFormat)
 		return &goast.BasicLit{
 			Kind:  token.FLOAT,
 			Value: fmt.Sprintf(format, v),
@@ -2320,6 +2523,16 @@ type m struct {
 	rows, columns int
 }
 
+func (mat m) toAst() goast.Expr {
+	body := append([]goast.Expr{}, mat.args...)
+	body = append(body, createFloat(mat.rows))
+	body = append(body, createFloat(mat.columns))
+	return &goast.CallExpr{
+		Fun:  goast.NewIdent(matrix),
+		Args: body,
+	}
+}
+
 func (matrix m) position(r, c int) int {
 	return c + matrix.columns*r
 }
@@ -2338,7 +2551,7 @@ func isMatrix(e goast.Expr) (mt *m, ok bool) {
 	}
 	mt = new(m)
 	if len(call.Args) < 3 {
-		panic(fmt.Errorf("matrix is not valid: %#v\n%s", call, astToStr(call)))
+		panic(fmt.Errorf("matrix is not valid: %d\n%#v\n%s", len(call.Args), call, astToStr(call)))
 		//fmt.Println(fmt.Errorf("Error : matrix is not valid: %#v\n%s", call, astToStr(call)))
 		//return
 	}
