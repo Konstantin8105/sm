@@ -945,9 +945,6 @@ func (s *sm) binaryUnary(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	if !ok {
 		return false, nil, nil
 	}
-	if bin.Op != token.ADD && bin.Op != token.SUB {
-		return false, nil, nil
-	}
 
 	var unary *goast.UnaryExpr
 	found := false
@@ -962,6 +959,64 @@ func (s *sm) binaryUnary(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		found = true
 	}
 	if !found {
+		return false, nil, nil
+	}
+
+	// from:
+	// ... * (+...)
+	// to:
+	// ... * (...)
+	if bin.Op == token.MUL && unary.Op == token.ADD {
+		return true, &goast.BinaryExpr{
+			X:  bin.X,
+			Op: token.MUL,
+			Y:  unary.X,
+		}, nil
+	}
+
+	// from:
+	// ... * (-...)
+	// to:
+	// -(...) * ...
+	if bin.Op == token.MUL && unary.Op == token.SUB {
+		return true, &goast.BinaryExpr{
+			X: &goast.UnaryExpr{
+				Op: token.SUB,
+				X:  bin.X,
+			},
+			Op: token.MUL,
+			Y:  unary.X,
+		}, nil
+	}
+
+	// from:
+	// ... / (+...)
+	// to:
+	// ... / (...)
+	if bin.Op == token.QUO && unary.Op == token.ADD {
+		return true, &goast.BinaryExpr{
+			X:  bin.X,
+			Op: token.QUO,
+			Y:  unary.X,
+		}, nil
+	}
+
+	// from:
+	// ... / (-...)
+	// to:
+	// (-...) / (...)
+	if bin.Op == token.QUO && unary.Op == token.SUB {
+		return true, &goast.BinaryExpr{
+			X: &goast.UnaryExpr{
+				Op: token.SUB,
+				X:  bin.X,
+			},
+			Op: token.QUO,
+			Y:  unary.X,
+		}, nil
+	}
+
+	if bin.Op != token.ADD && bin.Op != token.SUB {
 		return false, nil, nil
 	}
 
@@ -1009,30 +1064,6 @@ func (s *sm) binaryUnary(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		return true, &goast.BinaryExpr{
 			X:  bin.X,
 			Op: token.ADD,
-			Y:  unary.X,
-		}, nil
-	}
-
-	// from:
-	// ... * (+...)
-	// to:
-	// ... * (...)
-	if bin.Op == token.MUL && unary.Op == token.ADD {
-		return true, &goast.BinaryExpr{
-			X:  bin.X,
-			Op: token.MUL,
-			Y:  unary.X,
-		}, nil
-	}
-
-	// from:
-	// ... / (+...)
-	// to:
-	// ... / (...)
-	if bin.Op == token.QUO && unary.Op == token.ADD {
-		return true, &goast.BinaryExpr{
-			X:  bin.X,
-			Op: token.QUO,
 			Y:  unary.X,
 		}, nil
 	}
