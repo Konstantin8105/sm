@@ -946,6 +946,12 @@ func (s *sm) binaryUnary(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		return false, nil, nil
 	}
 
+	// from : (0 + ...)
+	// to   : (...)
+	if ok, n := isNumber(bin.X); ok && bin.Op == token.ADD && n == 0 {
+		return true, bin.Y, nil
+	}
+
 	var unary *goast.UnaryExpr
 	found := false
 	if par, ok := bin.Y.(*goast.ParenExpr); ok {
