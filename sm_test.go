@@ -86,7 +86,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "pow(a,-3)",
-			out:  "1.000/a*(1.000/a)*(1.000/a)",
+			out:  "1.000/(a*(a*a))",
 		},
 		{
 			expr: "pow(a,5-3+1)",
@@ -322,7 +322,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "integral(pow(x,2),x,1,2);variable(x)",
-			out:  "2.331",
+			out:  "2.334",
 		},
 
 		{
@@ -339,7 +339,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "integral(pow(x,2),x,2,3);variable(x)",
-			out:  "6.327",
+			out:  "6.333",
 		},
 		{
 			expr: "integral(pow(x,3),x,2,3);variable(x)",
@@ -351,19 +351,19 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "integral(pow(a*x,2),x,2,3);variable(x);constant(a)",
-			out:  "6.327*(a*a)",
+			out:  "6.333*(a*a)",
 		},
 		{
 			expr: "integral(a*pow(x,2),x,2,3);variable(x);constant(a)",
-			out:  "6.327*a",
+			out:  "6.333*a",
 		},
 		{
 			expr: "integral(a+a*pow(x,2)+pow(x,3)*a,x,2,3);variable(x);constant(a)",
-			out:  "23.577 * a",
+			out:  "23.583 * a",
 		},
 		{
 			expr: "integral(pow(x,2),x,2,3);variable(x)",
-			out:  "6.327",
+			out:  "6.333",
 		},
 		{
 			expr: "integral(x*a*x*a*x*a,x,2,3);variable(x);constant(a)",
@@ -371,15 +371,15 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "integral(-1.000/L*(1.000/L), s, 0.000, 1.000); constant(L)",
-			out:  "-1.000 / L * (1.000 / L)",
+			out:  "-1.000 / (L * L)",
 		},
 		{
 			expr: "integral(((sin(q))-(sin(q))*s)/r, s, 0.000, 1.000); constant(q); constant(r); variable(s)",
-			out:  "sin(q)/r-0.500/r*sin(q)",
+			out:  "sin(q)/r-0.500*sin(q)/r",
 		},
 		{
 			expr: "integral((v*(-1.000/L)+(1.000-s)*sin(q)/r)*(1.000/L), s, 0.000, 1.000); constant(L); constant(q); constant(r);constant(v);",
-			out:  "v*(-1.000/L*(1.000/L))+(1.000/L*(sin(q)/r)-1.000/L*(0.500/r*sin(q)))",
+			out:  "-1.000*(v/(L*L)) + (sin(q)/(L*r) - 0.500*sin(q)/(L*r))",
 		},
 		{
 			expr: `integral(transpose(matrix(a*s,1,1))*matrix(b*s,1,1)*matrix(c*s,1,1),s, 1, 2);variable(s);constant(a);constant(b);constant(c)`,
@@ -387,23 +387,23 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "integral((2.000*(sin(q)*s)-3.000*(sin(q)*(s*s)))/r*(1.000/L), s, 0.000, 1.000);constant(q);constant(r);constant(L);",
-			out:  "0.500/L*(2.000/r*sin(q))-0.333/L*(3.000/r*sin(q))",
+			out:  "sin(q)/(L*r)-0.999*sin(q)/(L*r)",
 		},
 		{
 			expr: " integral(s*(6.000/L*(s*(1.000/L))), s, 0.000, 1.000); constant(L);",
-			out:  "1.998/L*(1.000/L)",
+			out:  "1.998/(L*L)",
 		},
 		{
 			expr: "integral(1.000/L*(-1.000/L)+v*(1.000/L*((sin(q)-sin(q)*s)/r)), s, 0.000, 1.000);constant(L,v,a,q,r); variable(s)",
-			out:  "-1.000/L*(1.000/L)+(v*(1.000/L*(sin(q)/r))-v*(1.000/L*(0.500/r*sin(q))))",
+			out:  "-1.000/(L*L)+(v*(sin(q)/(L*r))-0.500*(v*sin(q))/(L*r))",
 		},
 		{
 			expr: "integral((sin(q)-sin(q)*s)/r*(1.000/L), s, 0.000, 1.000); constant(q,r,L)",
-			out:  "1.000/L*(sin(q)/r)-1.000/L*(0.500/r*sin(q))",
+			out:  "sin(q)/(L*r)-0.500*sin(q)/(L*r)",
 		},
 		{
 			expr: "integral(s*sin(q)/r, s, 0.000, 1.000); constant(q,r)",
-			out:  "0.500/r*sin(q)",
+			out:  "0.500*sin(q)/r",
 		},
 		{
 			expr: "integral(sin(q)/r, s, 0.000, 1.000); constant(q,r)",
@@ -431,15 +431,15 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "inverse(matrix(a,b,c,d,e,f,g,h,i,3,3)); constant(a,b,c,d,e,f,g,h);",
-			out:  "matrix(e*(1.000/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))*i)-f*(1.000/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))*h),-1.000*(b*(1.000/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))*i))+c*(1.000/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))*h),b*(1.000/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))*f)-c*(1.000/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))*e),-1.000*(d*(1.000/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))*i))+f*(1.000/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))*g),a*(1.000/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))*i)-c*(1.000/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))*g),-1.000*(a*(1.000/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))*f))+c*(1.000/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))*d),d*(1.000/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))*h)-e*(1.000/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))*g),-1.000*(a*(1.000/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))*h))+b*(1.000/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))*g),a*(1.000/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))*e)-b*(1.000/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))*d),3.000,3.000)",
+			out:  "matrix((e*i-f*h)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),(-1.000*(b*i)+c*h)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),(b*f-c*e)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),(-1.000*(d*i)+f*g)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),(a*i-c*g)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),(-1.000*(a*f)+c*d)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),(d*h-e*g)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),(-1.000*(a*h)+b*g)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),(a*e-b*d)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),3.000,3.000)",
 		},
 		{
 			expr: "inverse(matrix(a,b,c,d,2,2))",
-			out:  "matrix(d*(1.000/(a*d-b*c)),-1.000*(b*(1.000/(a*d-b*c))),-1.000*(c*(1.000/(a*d-b*c))),a*(1.000/(a*d-b*c)),2.000,2.000)",
+			out:  "matrix(d/(a*d-b*c),-1.000*b/(a*d-b*c),-1.000*c/(a*d-b*c),a/(a*d-b*c),2.000,2.000)",
 		},
 		{
 			expr: `inverse(matrix( 1,l,0, l,0,1, l,1,0, 3,3)); constant(l);`,
-			out:  "matrix(-1.000/(-1.000+l*l),0.000,l*(1.000/(-1.000+l*l)),l*(1.000/(-1.000+l*l)),0.000,-1.000/(-1.000+l*l),l*(1.000/(-1.000+l*l)),-1.000/(-1.000+l*l)+l*(1.000/(-1.000+l*l)*l),0.000-l*(1.000/(-1.000+l*l)*l),3.000,3.000)",
+			out:  "matrix(-1.000/(-1.000+l*l),0.000,l/(-1.000+l*l),l/(-1.000+l*l),0.000,-1.000/(-1.000+l*l),l/(-1.000+l*l),1.000,(0.000-l*l)/(-1.000+l*l),3.000,3.000)",
 		},
 		{
 			expr: "l*(l*(1.000/l*(1.000/l*l)))",
@@ -451,7 +451,31 @@ func Test(t *testing.T) {
 		// },
 		{
 			expr: "6.000 / L * (0.333 / L); constant(L)",
-			out: "1.998 / L * (1.000 / L)",
+			out:  "1.998 / (L * L)",
+		},
+		{
+			expr: "(l*(1.000/(l*(l*(l*l)))))",
+			out:  "1.000/(l*(l*l))",
+		},
+		{
+			expr: "integral(3.000/(l*(l*(l*l)))*(l*(l*(3.000/(l*(l*(l*l)))*(l*l)))), x, 0.000, l)",
+			out:  "9.000/(l*(l*l))",
+		},
+		{
+			expr: "integral(x*(2.000/(l*(l*l))*(3.000/(l*(l*(l*l)))*(l*l))), x, 0.000, l); constant(l);",
+			out:  "3.000/(l*(l*l))",
+		},
+		{
+			expr: "36.000/(l*(l*l))*(1.000/(l*l))",
+			out:  "36.000/(l*(l*(l*(l*l))))",
+		},
+		{
+			expr: "3.000/(l*(l*(l*l)))*(l*l)",
+			out:  "3.000/(l*l)",
+		},
+		{
+			expr: "3.000/(l*(l*(l*l)))*(l*l)+1",
+			out:  "1.000 + 3.000/(l*l)",
 		},
 	}
 
