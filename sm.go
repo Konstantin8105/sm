@@ -518,6 +518,7 @@ func (s *sm) walk(a goast.Expr) (c bool, result goast.Expr, _ error) {
 			s.constantsLeftLeft,
 			s.openParenLeft,
 			s.openParenRight,
+			s.insideParen,
 			// 			s.openParen,
 			// 			s.openParenSingleNumber,
 			// 			s.openParenSingleIdent,
@@ -780,14 +781,10 @@ func (s *sm) matrixInverse(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 			}
 			mat.args[mat.position(r, c)] = detm
 			if (r+c)%2 != 0 {
-				mat.args[mat.position(r, c)] = &goast.ParenExpr{
-					X: &goast.ParenExpr{
-						X: &goast.BinaryExpr{
-							X:  createFloat(-1.0),
-							Op: token.MUL,
-							Y:  mat.args[mat.position(r, c)],
-						},
-					},
+				mat.args[mat.position(r, c)] = &goast.BinaryExpr{
+					X:  createFloat(-1.0),
+					Op: token.MUL,
+					Y:  mat.args[mat.position(r, c)],
 				}
 			}
 		}
@@ -1231,6 +1228,19 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 				}, nil
 			}
 		}
+		// if 0 < len(up) && 0 < len(do) {
+		// 	if ok, nup := isNumber(up[0]); ok {
+		// 		if ok, ndo := isNumber(do[0]); ok && ndo != 1.0 {
+		// 			up[0] = createFloat(nup / ndo)
+		// 			do[0] = createFloat(1)
+		// 			return true, &goast.BinaryExpr{
+		// 				X:  up.toAst(),
+		// 				Op: token.QUO,
+		// 				Y:  do.toAst(),
+		// 			}, nil
+		// 		}
+		// 	}
+		// }
 	}
 
 	if bin, ok := a.(*goast.BinaryExpr); ok && bin.Op == token.QUO {
@@ -1478,7 +1488,7 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 			mt.args[i] = &goast.CallExpr{
 				Fun: goast.NewIdent(differential),
 				Args: []goast.Expr{
-					&goast.ParenExpr{X: mt.args[i]},
+					mt.args[i],
 					call.Args[1],
 				},
 			}
@@ -1519,7 +1529,7 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 			v2 := bin.Y
 			v3 := bin.Y
 			return true, &goast.BinaryExpr{
-				X: &goast.ParenExpr{X: &goast.BinaryExpr{
+				X: &goast.BinaryExpr{
 					X: &goast.BinaryExpr{
 						X: &goast.CallExpr{
 							Fun: goast.NewIdent(differential),
@@ -1543,13 +1553,13 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 							},
 						},
 					},
-				}},
+				},
 				Op: token.QUO,
-				Y: &goast.ParenExpr{X: &goast.BinaryExpr{
+				Y: &goast.BinaryExpr{
 					X:  v3,
 					Op: token.MUL,
 					Y:  v3,
-				}},
+				},
 			}, nil
 
 		case token.MUL: // *
@@ -1738,7 +1748,7 @@ func (s *sm) functionPow(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		x1 := val
 		x2 := val
 		return true, &goast.BinaryExpr{
-			X:  &goast.ParenExpr{X: x1},
+			X:  x1,
 			Op: token.MUL,
 			Y: &goast.CallExpr{
 				Fun: goast.NewIdent(pow),
@@ -1768,94 +1778,10 @@ func (s *sm) functionPow(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		Y: &goast.BinaryExpr{
 			X:  createFloat("1"),
 			Op: token.QUO,
-			Y:  &goast.ParenExpr{X: x2},
+			Y:  x2,
 		},
 	}, nil
 }
-
-// func (s *sm) openParenSingleIdent(a goast.Expr) (changed bool, r goast.Expr, _ error) {
-// 	par, ok := a.(*goast.ParenExpr)
-// 	if !ok {
-// 		return false, nil, nil
-// 	}
-//
-// 	// from:
-// 	// (number)
-// 	// to:
-// 	// number
-// 	num, ok := par.X.(*goast.Ident)
-// 	if !ok {
-// 		return false, nil, nil
-// 	}
-//
-// 	return true, num, nil
-// }
-
-// func (s *sm) openParenSingleNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
-// 	par, ok := a.(*goast.ParenExpr)
-// 	if !ok {
-// 		return false, nil, nil
-// 	}
-//
-// 	// from:
-// 	// (number)
-// 	// to:
-// 	// number
-// 	num, ok := par.X.(*goast.BasicLit)
-// 	if !ok {
-// 		return false, nil, nil
-// 	}
-//
-// 	return true, num, nil
-// }
-
-// func (s *sm) openParen(a goast.Expr) (changed bool, r goast.Expr, _ error) {
-// 	par, ok := a.(*goast.ParenExpr)
-// 	if !ok {
-// 		return false, nil, nil
-// 	}
-//
-// 	// from:
-// 	// (... */ ...)
-// 	// to:
-// 	// (...) */  (...)
-// 	bin, ok := par.X.(*goast.BinaryExpr)
-// 	if !ok {
-// 		return false, nil, nil
-// 	}
-// 	if bin.Op != token.MUL && bin.Op != token.QUO {
-// 		return false, nil, nil
-// 	}
-// 	var (
-// 		Op = bin.Op
-// 		X  = bin.X
-// 		Y  = bin.Y
-// 	)
-//
-// 	switch X.(type) {
-// 	// no need paren
-// 	case *goast.BasicLit, *goast.Ident:
-//
-// 	default:
-// 		X = &goast.ParenExpr{X: X}
-// 	}
-//
-// 	switch Y.(type) {
-// 	// no need paren
-// 	case *goast.BasicLit, *goast.Ident:
-//
-// 	default:
-// 		Y = &goast.ParenExpr{X: Y}
-// 	}
-//
-// 	r = &goast.BinaryExpr{
-// 		X:  X,
-// 		Op: Op,
-// 		Y:  Y,
-// 	}
-//
-// 	return true, r, nil
-// }
 
 func (s *sm) openParenRight(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	bin, ok := a.(*goast.BinaryExpr)
@@ -1907,19 +1833,12 @@ func (s *sm) openParenRight(a goast.Expr) (changed bool, r goast.Expr, _ error) 
 	return true, result, nil
 }
 
-// func insideParen(a goast.Expr) (in goast.Expr, ok bool) {
-// 	if u, ok := a.(*goast.ParenExpr); ok {
-// 		var s goast.Expr = u
-// 		for {
-// 			g, ok := s.(*goast.ParenExpr)
-// 			if !ok {
-// 				return s, true
-// 			}
-// 			s = g.X
-// 		}
-// 	}
-// 	return nil, false
-// }
+func (s *sm) insideParen(a goast.Expr) (changed bool, r goast.Expr, _ error) {
+	if u, ok := a.(*goast.ParenExpr); ok {
+		return true, u.X, nil
+	}
+	return false, nil, nil
+}
 
 func (s *sm) openParenLeft(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	v, ok := a.(*goast.BinaryExpr)
@@ -2302,7 +2221,7 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 			mt.args[i] = &goast.CallExpr{
 				Fun: goast.NewIdent(integralName),
 				Args: []goast.Expr{
-					&goast.ParenExpr{X: mt.args[i]},
+					mt.args[i],
 					variable, begin, finish,
 				},
 			}
@@ -2499,24 +2418,22 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 				Op: token.QUO,
 				Y:  createFloat(fmt.Sprintf("%15e", n+1.0)),
 			}
-			return true, &goast.ParenExpr{
-				X: &goast.BinaryExpr{
-					X: &goast.CallExpr{
-						Fun: goast.NewIdent("inject"),
-						Args: []goast.Expr{
-							div,
-							variable,
-							finish,
-						},
+			return true, &goast.BinaryExpr{
+				X: &goast.CallExpr{
+					Fun: goast.NewIdent("inject"),
+					Args: []goast.Expr{
+						div,
+						variable,
+						finish,
 					},
-					Op: token.SUB,
-					Y: &goast.CallExpr{
-						Fun: goast.NewIdent("inject"),
-						Args: []goast.Expr{
-							div,
-							variable,
-							begin,
-						},
+				},
+				Op: token.SUB,
+				Y: &goast.CallExpr{
+					Fun: goast.NewIdent("inject"),
+					Args: []goast.Expr{
+						div,
+						variable,
+						begin,
 					},
 				},
 			}, nil
@@ -3130,6 +3047,32 @@ func parseQuoArray(e goast.Expr) (up, do multiplySlice, ok bool) {
 	if !ok {
 		return
 	}
+	// switch bin.Op {
+	// case token.MUL:
+	// 	up2, do2, ok2 := parseQuoArray(bin.X)
+	// 	up3, do3, ok3 := parseQuoArray(bin.Y)
+	// 	if !ok2 || !ok3 {
+	// 		return nil, nil, false
+	// 	}
+	// 	up = append(up2, up3...)
+	// 	do = append(do2, do3...)
+	// 	if len(do) == 0 {
+	// 		do = append(do, createFloat(1))
+	// 	}
+	// 	ok = true
+	//
+	// case token.QUO:
+	// 	if up, ok = parseMulArray(bin.X); !ok {
+	// 		return
+	// 	}
+	// 	do, ok = parseMulArray(bin.Y)
+	//
+	// default:
+	// 	up = append(up, e)
+	// 	do = append(do, createFloat(1))
+	// 	ok = true
+	// }
+
 	if bin.Op == token.MUL {
 		up, ok = parseMulArray(e)
 		do = append([]goast.Expr{}, createFloat(1))
