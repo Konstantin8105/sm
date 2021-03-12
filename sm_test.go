@@ -94,7 +94,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "pow(a+1,2)",
-			out: "1.000+2.000*a+a*a",
+			out:  "1.000+2.000*a+a*a",
 		},
 		{
 			expr: "pow(a+b,5-4)",
@@ -102,7 +102,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "pow(a+b,4/2); constant(a,b)",
-			out: "a*a+2.000*(a*b)+b*b",
+			out:  "a*a+2.000*(a*b)+b*b",
 		},
 		{
 			expr: "pow(2,pow(1,-1))",
@@ -235,7 +235,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "matrix(5+2*a+a,1,1)*a",
-			out:  "matrix(5.000*a+2.000*(a*a)+a*a,1.000,1.000)",
+			out:  "matrix(5.000*a+3.000*(a*a),1.000,1.000)",
 		},
 		{
 			expr: "matrix(5+a,1,1)*a",
@@ -479,7 +479,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "36.000*EJ/(l*(l*l))+(0.000-72.000*(EJ*integral(x/1.000, x, 0.000, l))/(l*(l*(l*(l*l)))))+(0.000-72.000*(EJ*integral(x/1.000, x, 0.000, l))/(l*(l*(l*(l*l))))+47.952*EJ/(l*(l*l))); variable(x); constant(l);",
-			out: "36.000*EJ/(l*(l*l))+2.000*-(72.000*EJ/2.000/(l*(l*l)))+47.952*EJ/(l*(l*l))",
+			out:  "83.952*(EJ/(l*(l*l))) + 2.000*-(72.000*EJ/2.000/(l*(l*l)))",
 		},
 		{
 			expr: "1/(36.000/(l*(l*l))*(1.000/(l*l)))",
@@ -487,7 +487,11 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "1/(36.000*EJ/(l*(l*l))+(0.000-72.000*(EJ*integral(x/1.000, x, 0.000, l))/(l*(l*(l*(l*l)))))+(0.000-72.000*(EJ*integral(x/1.000, x, 0.000, l))/(l*(l*(l*(l*l))))+47.952*EJ/(l*(l*l)))); variable(x); constant(l);",
-			out: "1.000 / (36.000*EJ/(l*(l*l)) + 2.000*-(72.000*EJ/2.000/(l*(l*l))) + 47.952*EJ/(l*(l*l)))",
+			out:  "1.000 / (83.952*(EJ/(l*(l*l))) + 2.000*-(72.000*EJ/2.000/(l*(l*l))))",
+		},
+		{
+			expr: "-5*x/y+2*x+5*y+3*x-1*y+12*x/y",
+			out:  "7.000*(x/y) + 5.000*x + 4.000*y",
 		},
 	}
 

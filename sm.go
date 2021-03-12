@@ -1037,7 +1037,6 @@ func (s *sm) binaryUnary(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		}, nil
 	}
 
-
 	return false, nil, nil
 }
 
@@ -1189,6 +1188,74 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 				}
 				sum = append(sum[:j], sum[j+1:]...)
 				return true, sum.toAst(), nil
+			}
+		}
+		for i := range sum {
+			for j := range sum {
+				if j <= i {
+					continue
+				}
+				// from : a * x + b * x
+				// to   : (a + b) * x
+				if left, ok := parseMulArray(sum[i].toAst()); ok && 1 < len(left) {
+					if right, ok := parseMulArray(sum[j].toAst()); ok && 1 < len(right) {
+						if astToStr(multiplySlice(left[1:]).toAst()) !=
+							astToStr(multiplySlice(right[1:]).toAst()) {
+							continue
+						}
+						if ok, _ := isNumber(left[0]); !ok {
+							continue
+						}
+						if ok, _ := isNumber(right[0]); !ok {
+							continue
+						}
+						sum[i] = sliceSumm{
+							isNegative: false,
+							value: &goast.BinaryExpr{
+								X: &goast.BinaryExpr{
+									X:  left[0],
+									Op: token.ADD,
+									Y:  right[0],
+								},
+								Op: token.MUL,
+								Y:  multiplySlice(left[1:]).toAst(),
+							},
+						}
+						sum = append(sum[:j], sum[j+1:]...)
+						return true, sum.toAst(), nil
+					}
+				}
+				// from : a * x + x
+				// to   : (a + 1) * x
+				if left, ok := parseMulArray(sum[i].toAst()); ok && 1 < len(left) {
+					valWithoutSign := sum[j].toAst()
+					op := token.ADD
+					if un, ok := valWithoutSign.(*goast.UnaryExpr); ok {
+						valWithoutSign = un.X
+						op = un.Op
+					}
+					if astToStr(multiplySlice(left[1:]).toAst()) !=
+						astToStr(valWithoutSign) {
+						continue
+					}
+					if ok, _ := isNumber(left[0]); !ok {
+						continue
+					}
+					sum[i] = sliceSumm{
+						isNegative: false,
+						value: &goast.BinaryExpr{
+							X: &goast.BinaryExpr{
+								X:  left[0],
+								Op: op,
+								Y:  createFloat(1),
+							},
+							Op: token.MUL,
+							Y:  multiplySlice(left[1:]).toAst(),
+						},
+					}
+					sum = append(sum[:j], sum[j+1:]...)
+					return true, sum.toAst(), nil
+				}
 			}
 		}
 	}
