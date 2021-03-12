@@ -18,12 +18,13 @@ func main() {
 }
 
 func cal(name, str string) string {
-	fmt.Printf("\nName  : %s\n", name)
+	fmt.Printf("\nName    : %s\n", name)
+	fmt.Printf("\nFormula : %s\n", str)
 	val, err := sm.Sexpr(nil, str)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("Value : %s\n", val)
+	fmt.Printf("Value     : %s\n", val)
 	return val
 }
 
@@ -47,6 +48,8 @@ func beam() {
 
 		Kbend = cal("Kbend", "EJ*integral( transpose(" + d2Fdx2 +") * " + d2Fdx2 + ",x,0,l);variable(x); constant(l);")
 
+		K = cal("K", Kbend + " * l*l*l/EJ")
+
 		// stress = cal("stress", "transpose("+ddispl+") * "+load)
 	)
 	_ = w
@@ -57,6 +60,7 @@ func beam() {
 	_ = inverseL
 	_ = Ψbend
 	_ = Kbend
+	_=K
 	//_ = stress
 }
 

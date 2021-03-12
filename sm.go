@@ -2563,31 +2563,39 @@ func (s *sm) mulConstToMatrix(a goast.Expr) (changed bool, r goast.Expr, _ error
 		}
 		return true, mt.toAst(), nil
 	}
+
 	if v.Op != token.MUL {
 		return false, nil, nil
 	}
-	_, ok = isMatrix(v.X)
-	if ok {
-		return false, nil, nil
-	}
-	ok = isTranspose(v.X)
-	if ok {
-		return false, nil, nil
-	}
-	mt, ok := isMatrix(v.Y)
-	if !ok {
-		return false, nil, nil
-	}
 
-	for i := 0; i < len(mt.args); i++ {
-		mt.args[i] = &goast.BinaryExpr{
-			X:  mt.args[i],
-			Op: token.MUL, // *
-			Y:  v.X,
+	value, matExpr := v.X, v.Y
+	for i := 0; i < 2; i++ {
+		value, matExpr = matExpr, value
+		if _, ok := isMatrix(matExpr); !ok {
+			continue
 		}
+		if ok := isTranspose(value); ok {
+			continue
+		}
+		if _, ok := isMatrix(value); ok {
+			continue
+		}
+
+		mt, ok := isMatrix(matExpr)
+		if !ok {
+			continue
+		}
+		for i := 0; i < len(mt.args); i++ {
+			mt.args[i] = &goast.BinaryExpr{
+				X:  mt.args[i],
+				Op: token.MUL, // *
+				Y:  value,
+			}
+		}
+		return true, mt.toAst(), nil
 	}
 
-	return true, mt.toAst(), nil
+	return false, nil, nil
 }
 
 func (s *sm) swap(left, right goast.Expr) bool {
