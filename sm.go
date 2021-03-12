@@ -1228,19 +1228,55 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 				}, nil
 			}
 		}
-		// if 0 < len(up) && 0 < len(do) {
-		// 	if ok, nup := isNumber(up[0]); ok {
-		// 		if ok, ndo := isNumber(do[0]); ok && ndo != 1.0 {
-		// 			up[0] = createFloat(nup / ndo)
-		// 			do[0] = createFloat(1)
-		// 			return true, &goast.BinaryExpr{
-		// 				X:  up.toAst(),
-		// 				Op: token.QUO,
-		// 				Y:  do.toAst(),
-		// 			}, nil
-		// 		}
-		// 	}
-		// }
+		if 0 < len(up) && 0 < len(do) {
+			var num float64 = 1.0
+			counter := 0
+		loop:
+			for i := range up {
+				if ok, n := isNumber(up[i]); ok && n != 1 {
+					num *= n
+					up = append(up[:i], up[i+1:]...)
+					counter++
+					goto loop
+				}
+			}
+			for i := range do {
+				if ok, n := isNumber(do[i]); ok && n != 1 {
+					num /= n
+					do = append(do[:i], do[i+1:]...)
+					counter++
+					goto loop
+				}
+			}
+			if num != 1.0 && 1 < counter {
+				if len(do) == 0 {
+					if len(up) == 0 {
+						return true, createFloat(num), nil
+					}
+					return true, &goast.BinaryExpr{
+						X:  createFloat(num),
+						Op: token.MUL,
+						Y:  up.toAst(),
+					}, nil
+				}
+				if len(up) == 0 {
+					return true, &goast.BinaryExpr{
+						X:  createFloat(num),
+						Op: token.QUO,
+						Y:  do.toAst(),
+					}, nil
+				}
+				return true, &goast.BinaryExpr{
+					X: &goast.BinaryExpr{
+						X:  createFloat(num),
+						Op: token.MUL,
+						Y:  up.toAst(),
+					},
+					Op: token.QUO,
+					Y:  do.toAst(),
+				}, nil
+			}
+		}
 	}
 
 	if bin, ok := a.(*goast.BinaryExpr); ok && bin.Op == token.QUO {
@@ -1264,7 +1300,11 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 					s = append(s, sum[:i]...)
 					s = append(s, sum[i+1:j]...)
 					s = append(s, sum[j+1:]...)
+					if 0 < len(s) {
 					return true, s.toAst(), nil
+				} else {
+					return true, createFloat(0), nil
+				}
 				}
 				// summ of 2 same
 				sum[i] = sliceSumm{
@@ -2988,6 +3028,23 @@ func debug(e goast.Expr) {
 type multiplySlice []goast.Expr
 
 func parseMulArray(e goast.Expr) (ma multiplySlice, ok bool) {
+	if par, ok := e.(*goast.ParenExpr); ok {
+		return parseMulArray(par.X)
+	}
+	if un, ok := e.(*goast.UnaryExpr); ok {
+		mm, ok := parseMulArray(un.X)
+		if !ok {
+			return nil, false
+		}
+		if un.Op == token.SUB {
+			if ok, n := isNumber(mm[0]); ok {
+				mm[0] = createFloat(-n)
+			} else {
+				mm = append(mm, createFloat(-1))
+			}
+		}
+		return mm, ok
+	}
 	if bin, ok := e.(*goast.BinaryExpr); ok && bin.Op == token.MUL {
 		left, leftok := parseMulArray(bin.X)
 		righ, righok := parseMulArray(bin.Y)
@@ -3043,48 +3100,67 @@ func (m multiplySlice) toAst() goast.Expr {
 }
 
 func parseQuoArray(e goast.Expr) (up, do multiplySlice, ok bool) {
+	if par, ok := e.(*goast.ParenExpr); ok {
+		return parseQuoArray(par.X)
+	}
+	if un, ok := e.(*goast.UnaryExpr); ok {
+		up, do, ok = parseQuoArray(un.X)
+		if !ok {
+			return nil, nil, false
+		}
+		if un.Op == token.SUB {
+			up = append(up, createFloat(-1))
+		}
+		return up, do, ok
+	}
 	bin, ok := e.(*goast.BinaryExpr)
 	if !ok {
+		up = append(up, e)
+		do = append(do, createFloat(1))
+		ok = true
 		return
 	}
-	// switch bin.Op {
-	// case token.MUL:
-	// 	up2, do2, ok2 := parseQuoArray(bin.X)
-	// 	up3, do3, ok3 := parseQuoArray(bin.Y)
-	// 	if !ok2 || !ok3 {
-	// 		return nil, nil, false
-	// 	}
-	// 	up = append(up2, up3...)
-	// 	do = append(do2, do3...)
-	// 	if len(do) == 0 {
-	// 		do = append(do, createFloat(1))
-	// 	}
-	// 	ok = true
-	//
-	// case token.QUO:
-	// 	if up, ok = parseMulArray(bin.X); !ok {
-	// 		return
-	// 	}
-	// 	do, ok = parseMulArray(bin.Y)
-	//
-	// default:
-	// 	up = append(up, e)
-	// 	do = append(do, createFloat(1))
-	// 	ok = true
-	// }
+	switch bin.Op {
+	case token.MUL:
+		up2, do2, ok2 := parseQuoArray(bin.X)
+		up3, do3, ok3 := parseQuoArray(bin.Y)
+		if !ok2 || !ok3 {
+			up = append(up, e)
+			do = append(do, createFloat(1))
+			ok = true
+			return
+		}
+		up = append(up2, up3...)
+		do = append(do2, do3...)
+		if len(do) == 0 {
+			do = append(do, createFloat(1))
+		}
+		ok = true
 
-	if bin.Op == token.MUL {
-		up, ok = parseMulArray(e)
-		do = append([]goast.Expr{}, createFloat(1))
-		return
+	case token.QUO:
+		if up, ok = parseMulArray(bin.X); !ok {
+			return
+		}
+		do, ok = parseMulArray(bin.Y)
+
+	default:
+		up = append(up, e)
+		do = append(do, createFloat(1))
+		ok = true
 	}
-	if bin.Op != token.QUO {
-		return
-	}
-	if up, ok = parseMulArray(bin.X); !ok {
-		return
-	}
-	do, ok = parseMulArray(bin.Y)
+	//
+	// if bin.Op == token.MUL {
+	// 	up, ok = parseMulArray(e)
+	// 	do = append([]goast.Expr{}, createFloat(1))
+	// 	return
+	// }
+	// if bin.Op != token.QUO {
+	// 	return
+	// }
+	// if up, ok = parseMulArray(bin.X); !ok {
+	// 	return
+	// }
+	// do, ok = parseMulArray(bin.Y)
 	return
 }
 
@@ -3121,6 +3197,28 @@ func (s sliceSumm) toAst() goast.Expr {
 }
 
 func parseSummArray(e goast.Expr) (s summSlice) {
+	// 	defer func() {
+	// 		fmt.Println(">>>", astToStr(s.toAst()))
+	// 		sd := []sliceSumm(s)
+	// 		for i := range sd {
+	// 			fmt.Println(">", astToStr(sd[i].toAst()), sd[i])
+	// 			debug(sd[i].value)
+	// 		}
+	// 	}()
+	if par, ok := e.(*goast.ParenExpr); ok {
+		return parseSummArray(par.X)
+	}
+	if un, ok := e.(*goast.UnaryExpr); ok {
+		ss := parseSummArray(un.X)
+		if un.Op == token.SUB {
+			sd := []sliceSumm(ss)
+			for i := range sd {
+				sd[i].isNegative = !sd[i].isNegative
+			}
+		}
+		return ss
+	}
+
 	bin, ok := e.(*goast.BinaryExpr)
 	if !ok || !(bin.Op == token.ADD || bin.Op == token.SUB) {
 		s = append(s, sliceSumm{
@@ -3137,5 +3235,4 @@ func parseSummArray(e goast.Expr) (s summSlice) {
 		}
 	}
 	return append(left, right...)
-	return
 }
