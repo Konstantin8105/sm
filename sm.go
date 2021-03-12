@@ -952,6 +952,15 @@ func (s *sm) binaryUnary(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		return true, bin.Y, nil
 	}
 
+	// from : (0 - ...)
+	// to   : -(...)
+	if ok, n := isNumber(bin.X); ok && bin.Op == token.SUB && n == 0 {
+		return true, &goast.UnaryExpr{
+			Op: token.SUB,
+			X:  bin.Y,
+		}, nil
+	}
+
 	var unary *goast.UnaryExpr
 	found := false
 	if par, ok := bin.Y.(*goast.ParenExpr); ok {
@@ -1188,6 +1197,39 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 				Op: token.QUO,
 				Y:  do.toAst(),
 			}, nil
+		}
+	}
+
+	if up, do, ok := parseQuoArray(a); ok {
+		for i := range up {
+			if un, ok := up[i].(*goast.UnaryExpr); ok {
+				value := &goast.UnaryExpr{
+					Op: un.Op,
+					X:  createFloat(1),
+				}
+				up[i] = un.X
+				up = append(up, value)
+				return true, &goast.BinaryExpr{
+					X:  up.toAst(),
+					Op: token.QUO,
+					Y:  do.toAst(),
+				}, nil
+			}
+		}
+		for i := range do {
+			if un, ok := do[i].(*goast.UnaryExpr); ok {
+				value := &goast.UnaryExpr{
+					Op: un.Op,
+					X:  createFloat(1),
+				}
+				do[i] = un.X
+				do = append(do, value)
+				return true, &goast.BinaryExpr{
+					X:  up.toAst(),
+					Op: token.QUO,
+					Y:  do.toAst(),
+				}, nil
+			}
 		}
 	}
 
