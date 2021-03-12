@@ -935,6 +935,12 @@ func (s *sm) divide(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 }
 
 func (s *sm) binaryUnary(a goast.Expr) (changed bool, r goast.Expr, _ error) {
+	if u1, ok := a.(*goast.UnaryExpr); ok && u1.Op == token.SUB {
+		if u2, ok := u1.X.(*goast.UnaryExpr); ok && u2.Op == token.SUB {
+			return true, u2.X, nil
+		}
+	}
+
 	bin, ok := a.(*goast.BinaryExpr)
 	if !ok {
 		return false, nil, nil
@@ -999,11 +1005,40 @@ func (s *sm) binaryUnary(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	// ... + (+...)
 	// to:
 	// ... + (...)
-	return true, &goast.BinaryExpr{
-		X:  bin.X,
-		Op: token.ADD,
-		Y:  unary.X,
-	}, nil
+	if bin.Op == token.ADD && unary.Op == token.ADD {
+		return true, &goast.BinaryExpr{
+			X:  bin.X,
+			Op: token.ADD,
+			Y:  unary.X,
+		}, nil
+	}
+
+	// from:
+	// ... * (+...)
+	// to:
+	// ... * (...)
+	if bin.Op == token.MUL && unary.Op == token.ADD {
+		return true, &goast.BinaryExpr{
+			X:  bin.X,
+			Op: token.MUL,
+			Y:  unary.X,
+		}, nil
+	}
+
+	// from:
+	// ... / (+...)
+	// to:
+	// ... / (...)
+	if bin.Op == token.QUO && unary.Op == token.ADD {
+		return true, &goast.BinaryExpr{
+			X:  bin.X,
+			Op: token.QUO,
+			Y:  unary.X,
+		}, nil
+	}
+
+
+	return false, nil, nil
 }
 
 func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
@@ -1117,6 +1152,44 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 				Op: token.QUO,
 				Y:  do.toAst(),
 			}, nil
+		}
+	}
+
+	if bin, ok := a.(*goast.BinaryExpr); ok && bin.Op == token.QUO {
+		if ok, n := isNumber(bin.Y); ok && n == 1.0 {
+			return true, bin.X, nil
+		}
+	}
+
+	if sum := parseSummArray(a); 1 < len(sum) {
+		for i := range sum {
+			for j := range sum {
+				if j <= i {
+					continue
+				}
+				if astToStr(sum[i].value) != astToStr(sum[j].value) {
+					continue
+				}
+				if sum[i].isNegative != sum[j].isNegative {
+					// remove 2 elements
+					var s summSlice
+					s = append(s, sum[:i]...)
+					s = append(s, sum[i+1:j]...)
+					s = append(s, sum[j+1:]...)
+					return true, s.toAst(), nil
+				}
+				// summ of 2 same
+				sum[i] = sliceSumm{
+					isNegative: false,
+					value: &goast.BinaryExpr{
+						X:  createFloat(2),
+						Op: token.MUL,
+						Y:  sum[i].toAst(),
+					},
+				}
+				sum = append(sum[:j], sum[j+1:]...)
+				return true, sum.toAst(), nil
+			}
 		}
 	}
 
@@ -2714,7 +2787,7 @@ func (s *sm) constants(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 
 // FloatFormat is format of float value, for more precision calculation use
 // value equal 12.
-const FloatFormat int = 3
+var FloatFormat int = 3
 
 func createFloat(value interface{}) *goast.BasicLit {
 	switch v := value.(type) {
@@ -2915,5 +2988,57 @@ func parseQuoArray(e goast.Expr) (up, do multiplySlice, ok bool) {
 		return
 	}
 	do, ok = parseMulArray(bin.Y)
+	return
+}
+
+type summSlice []sliceSumm
+
+func (s summSlice) toAst() goast.Expr {
+	if len(s) == 0 {
+		panic("not valid summSlice")
+	}
+	v := s[0].toAst()
+	for i := 1; i < len(s); i++ {
+		v = &goast.BinaryExpr{
+			X:  v,
+			Op: token.ADD,
+			Y:  s[i].toAst(),
+		}
+	}
+	return v
+}
+
+type sliceSumm struct {
+	isNegative bool
+	value      goast.Expr
+}
+
+func (s sliceSumm) toAst() goast.Expr {
+	if !s.isNegative {
+		return s.value
+	}
+	return &goast.UnaryExpr{
+		Op: token.SUB,
+		X:  s.value,
+	}
+}
+
+func parseSummArray(e goast.Expr) (s summSlice) {
+	bin, ok := e.(*goast.BinaryExpr)
+	if !ok || !(bin.Op == token.ADD || bin.Op == token.SUB) {
+		s = append(s, sliceSumm{
+			isNegative: false,
+			value:      e,
+		})
+		return
+	}
+	left := parseSummArray(bin.X)
+	right := parseSummArray(bin.Y)
+	if bin.Op == token.SUB {
+		for i := range right {
+			right[i].isNegative = !right[i].isNegative
+		}
+	}
+	return append(left, right...)
 	return
 }

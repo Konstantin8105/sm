@@ -94,7 +94,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "pow(a+1,2)",
-			out:  "1.000 + a + (a + a*a)",
+			out: "1.000+2.000*a+a*a",
 		},
 		{
 			expr: "pow(a+b,5-4)",
@@ -102,7 +102,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "pow(a+b,4/2); constant(a,b)",
-			out:  "a*a + a*b + (a*b + b*b)",
+			out: "a*a+2.000*(a*b)+b*b",
 		},
 		{
 			expr: "pow(2,pow(1,-1))",
@@ -476,6 +476,18 @@ func Test(t *testing.T) {
 		{
 			expr: "3.000/(l*(l*(l*l)))*(l*l)+1",
 			out:  "1.000 + 3.000/(l*l)",
+		},
+		{
+			expr: "36.000*EJ/(l*(l*l))+(0.000-72.000*(EJ*integral(x/1.000, x, 0.000, l))/(l*(l*(l*(l*l)))))+(0.000-72.000*(EJ*integral(x/1.000, x, 0.000, l))/(l*(l*(l*(l*l))))+47.952*EJ/(l*(l*l))); variable(x); constant(l);",
+			out: "36.000*EJ/(l*(l*l))+2.000*-(72.000*EJ/2.000/(l*(l*l)))+47.952*EJ/(l*(l*l))",
+		},
+		{
+			expr: "1/(36.000/(l*(l*l))*(1.000/(l*l)))",
+			out:  "l*(l*(l*(l*l)))/36.000",
+		},
+		{
+			expr: "1/(36.000*EJ/(l*(l*l))+(0.000-72.000*(EJ*integral(x/1.000, x, 0.000, l))/(l*(l*(l*(l*l)))))+(0.000-72.000*(EJ*integral(x/1.000, x, 0.000, l))/(l*(l*(l*(l*l))))+47.952*EJ/(l*(l*l)))); variable(x); constant(l);",
+			out: "1.000 / (36.000*EJ/(l*(l*l)) + 2.000*-(72.000*EJ/2.000/(l*(l*l))) + 47.952*EJ/(l*(l*l)))",
 		},
 	}
 

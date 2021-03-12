@@ -10,6 +10,7 @@ import (
 
 func main() {
 	sm.MaxIteration = -1
+	sm.FloatFormat = 6
 
 	// truss()
 	beam()
