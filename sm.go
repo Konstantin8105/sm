@@ -620,17 +620,17 @@ func (s *sm) matrixTranspose(e goast.Expr) (changed bool, r goast.Expr, _ error)
 	}
 
 	// transpose
-	var trans m
-	trans.args = make([]goast.Expr, len(mt.args))
-	trans.rows = mt.columns
-	trans.columns = mt.rows
-	for r := 0; r < mt.rows; r++ {
-		for c := 0; c < mt.columns; c++ {
-			trans.args[trans.position(c, r)] = mt.args[mt.position(r, c)]
+	var trans Matrix
+	trans.Args = make([]goast.Expr, len(mt.Args))
+	trans.Rows = mt.Cols
+	trans.Cols = mt.Rows
+	for r := 0; r < mt.Rows; r++ {
+		for c := 0; c < mt.Cols; c++ {
+			trans.Args[trans.Position(c, r)] = mt.Args[mt.Position(r, c)]
 		}
 	}
 
-	return true, trans.toAst(), nil
+	return true, trans.Ast(), nil
 }
 
 func (s *sm) matrixDet(e goast.Expr) (changed bool, r goast.Expr, _ error) {
@@ -654,38 +654,38 @@ func (s *sm) matrixDet(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 		panic("not valid det matrix")
 	}
 
-	if mt.columns != mt.rows {
+	if mt.Cols != mt.Rows {
 		panic("not square matrix")
 	}
 
 	// matrix 1x1
-	if mt.columns == 1 && mt.rows == 1 {
-		return true, mt.args[mt.position(0, 0)], nil
+	if mt.Cols == 1 && mt.Rows == 1 {
+		return true, mt.Args[mt.Position(0, 0)], nil
 	}
-	size := mt.columns
+	size := mt.Cols
 
 	// determinant of matrix
 	var dm goast.Expr
 	dm = createFloat(0.0)
 	for i := 0; i < size; i++ {
-		var mat m
+		var mat Matrix
 
-		mat.rows = size - 1
-		mat.columns = size - 1
-		mat.args = make([]goast.Expr, mat.columns*mat.rows)
+		mat.Rows = size - 1
+		mat.Cols = size - 1
+		mat.Args = make([]goast.Expr, mat.Cols*mat.Rows)
 		for row := 1; row < size; row++ {
 			for c := 0; c < size-1; c++ {
 				col := c
 				if i <= col {
 					col++
 				}
-				mat.args[mat.position(row-1, c)] = mt.args[mt.position(row, col)]
+				mat.Args[mat.Position(row-1, c)] = mt.Args[mt.Position(row, col)]
 			}
 		}
 
 		determinant := &goast.CallExpr{
 			Fun:  goast.NewIdent(det),
-			Args: []goast.Expr{mat.toAst()},
+			Args: []goast.Expr{mat.Ast()},
 		}
 
 		if i%2 == 0 || i == 0 {
@@ -693,7 +693,7 @@ func (s *sm) matrixDet(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 				X:  dm,
 				Op: token.ADD,
 				Y: &goast.BinaryExpr{
-					X:  mt.args[mt.position(0, i)],
+					X:  mt.Args[mt.Position(0, i)],
 					Op: token.MUL,
 					Y:  determinant,
 				},
@@ -703,7 +703,7 @@ func (s *sm) matrixDet(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 				X:  dm,
 				Op: token.SUB,
 				Y: &goast.BinaryExpr{
-					X:  mt.args[mt.position(0, i)],
+					X:  mt.Args[mt.Position(0, i)],
 					Op: token.MUL,
 					Y:  determinant,
 				},
@@ -735,10 +735,10 @@ func (s *sm) matrixInverse(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 		panic("not valid inverse matrix")
 	}
 
-	if mt.columns != mt.rows {
+	if mt.Cols != mt.Rows {
 		panic("not square matrix")
 	}
-	size := mt.columns
+	size := mt.Cols
 
 	value := &goast.BinaryExpr{
 		X:  createFloat(1.0),
@@ -750,16 +750,16 @@ func (s *sm) matrixInverse(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 	}
 
 	// prepare of matrix
-	var mat m
-	mat.rows = size
-	mat.columns = size
-	mat.args = make([]goast.Expr, mat.columns*mat.rows)
+	var mat Matrix
+	mat.Rows = size
+	mat.Cols = size
+	mat.Args = make([]goast.Expr, mat.Cols*mat.Rows)
 	for r := 0; r < size; r++ {
 		for c := 0; c < size; c++ {
-			var part m
-			part.rows = size - 1
-			part.columns = size - 1
-			part.args = make([]goast.Expr, part.columns*part.rows)
+			var part Matrix
+			part.Rows = size - 1
+			part.Cols = size - 1
+			part.Args = make([]goast.Expr, part.Cols*part.Rows)
 			for row := 0; row < size-1; row++ {
 				for col := 0; col < size-1; col++ {
 					row2, col2 := row, col
@@ -769,22 +769,22 @@ func (s *sm) matrixInverse(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 					if c <= col2 {
 						col2++
 					}
-					part.args[part.position(row, col)] = mt.args[mt.position(row2, col2)]
+					part.Args[part.Position(row, col)] = mt.Args[mt.Position(row2, col2)]
 				}
 			}
-			body := append([]goast.Expr{}, part.args...)
+			body := append([]goast.Expr{}, part.Args...)
 			body = append(body, createFloat(size-1))
 			body = append(body, createFloat(size-1))
 			detm := &goast.CallExpr{
 				Fun:  goast.NewIdent(det),
-				Args: []goast.Expr{part.toAst()},
+				Args: []goast.Expr{part.Ast()},
 			}
-			mat.args[mat.position(r, c)] = detm
+			mat.Args[mat.Position(r, c)] = detm
 			if (r+c)%2 != 0 {
-				mat.args[mat.position(r, c)] = &goast.BinaryExpr{
+				mat.Args[mat.Position(r, c)] = &goast.BinaryExpr{
 					X:  createFloat(-1.0),
 					Op: token.MUL,
-					Y:  mat.args[mat.position(r, c)],
+					Y:  mat.Args[mat.Position(r, c)],
 				}
 			}
 		}
@@ -795,7 +795,7 @@ func (s *sm) matrixInverse(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 		Op: token.MUL,
 		Y: &goast.CallExpr{
 			Fun:  goast.NewIdent(transpose),
-			Args: []goast.Expr{mat.toAst()},
+			Args: []goast.Expr{mat.Ast()},
 		},
 	}
 	return true, result, nil
@@ -819,22 +819,22 @@ func (s *sm) matrixMultiply(a goast.Expr) (changed bool, r goast.Expr, _ error) 
 	if !ok {
 		return false, nil, nil
 	}
-	if left.columns != right.rows {
+	if left.Cols != right.Rows {
 		return false, nil, fmt.Errorf("not valid matrix multiplication")
 	}
 
-	result := &goast.CallExpr{
-		Fun: goast.NewIdent(matrix),
-	}
+	var result Matrix
+	result.Rows = left.Rows
+	result.Cols = right.Cols
 	// multiplication
-	for lr := 0; lr < left.rows; lr++ {
-		for rc := 0; rc < right.columns; rc++ {
+	for lr := 0; lr < left.Rows; lr++ {
+		for rc := 0; rc < right.Cols; rc++ {
 			var arg goast.Expr
-			for p := 0; p < left.columns; p++ {
+			for p := 0; p < left.Cols; p++ {
 				mul := &goast.BinaryExpr{
-					X:  left.args[left.position(lr, p)],   // left
+					X:  left.Args[left.Position(lr, p)],   // left
 					Op: token.MUL,                         // *
-					Y:  right.args[right.position(p, rc)], // right
+					Y:  right.Args[right.Position(p, rc)], // right
 				}
 				// fmt.Println(left,len(left.args),	left.position(lr,p))
 				if p == 0 {
@@ -850,12 +850,7 @@ func (s *sm) matrixMultiply(a goast.Expr) (changed bool, r goast.Expr, _ error) 
 			result.Args = append(result.Args, arg)
 		}
 	}
-	// rows
-	result.Args = append(result.Args, createFloat(fmt.Sprintf("%d", left.rows)))
-	// columns
-	result.Args = append(result.Args, createFloat(fmt.Sprintf("%d", right.columns)))
-
-	return true, result, nil
+	return true, result.Ast(), nil
 }
 
 func (s *sm) divideDivide(a goast.Expr) (changed bool, r goast.Expr, _ error) {
@@ -1301,10 +1296,10 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 					s = append(s, sum[i+1:j]...)
 					s = append(s, sum[j+1:]...)
 					if 0 < len(s) {
-					return true, s.toAst(), nil
-				} else {
-					return true, createFloat(0), nil
-				}
+						return true, s.toAst(), nil
+					} else {
+						return true, createFloat(0), nil
+					}
 				}
 				// summ of 2 same
 				sum[i] = sliceSumm{
@@ -1524,16 +1519,16 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 
 	// d(matrix(...),x)
 	if mt, ok := isMatrix(call.Args[0]); ok {
-		for i := 0; i < len(mt.args); i++ {
-			mt.args[i] = &goast.CallExpr{
+		for i := 0; i < len(mt.Args); i++ {
+			mt.Args[i] = &goast.CallExpr{
 				Fun: goast.NewIdent(differential),
 				Args: []goast.Expr{
-					mt.args[i],
+					mt.Args[i],
 					call.Args[1],
 				},
 			}
 		}
-		return true, mt.toAst(), nil
+		return true, mt.Ast(), nil
 	}
 
 	if bin, ok := call.Args[0].(*goast.BinaryExpr); ok {
@@ -2257,16 +2252,16 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 
 	// integral(matrix(...),x,0,1)
 	if mt, ok := isMatrix(function); ok {
-		for i := 0; i < len(mt.args); i++ {
-			mt.args[i] = &goast.CallExpr{
+		for i := 0; i < len(mt.Args); i++ {
+			mt.Args[i] = &goast.CallExpr{
 				Fun: goast.NewIdent(integralName),
 				Args: []goast.Expr{
-					mt.args[i],
+					mt.Args[i],
 					variable, begin, finish,
 				},
 			}
 		}
-		return true, mt.toAst(), nil
+		return true, mt.Ast(), nil
 	}
 
 	// extract constansts:
@@ -2553,14 +2548,14 @@ func (s *sm) mulConstToMatrix(a goast.Expr) (changed bool, r goast.Expr, _ error
 		if !ok {
 			return false, nil, nil
 		}
-		for i := 0; i < len(mt.args); i++ {
-			mt.args[i] = &goast.BinaryExpr{
-				X:  mt.args[i],
+		for i := 0; i < len(mt.Args); i++ {
+			mt.Args[i] = &goast.BinaryExpr{
+				X:  mt.Args[i],
 				Op: token.QUO,
 				Y:  v.Y,
 			}
 		}
-		return true, mt.toAst(), nil
+		return true, mt.Ast(), nil
 	}
 
 	if v.Op != token.MUL {
@@ -2584,14 +2579,14 @@ func (s *sm) mulConstToMatrix(a goast.Expr) (changed bool, r goast.Expr, _ error
 		if !ok {
 			continue
 		}
-		for i := 0; i < len(mt.args); i++ {
-			mt.args[i] = &goast.BinaryExpr{
-				X:  mt.args[i],
+		for i := 0; i < len(mt.Args); i++ {
+			mt.Args[i] = &goast.BinaryExpr{
+				X:  mt.Args[i],
 				Op: token.MUL, // *
 				Y:  value,
 			}
 		}
-		return true, mt.toAst(), nil
+		return true, mt.Ast(), nil
 	}
 
 	return false, nil, nil
@@ -2942,26 +2937,26 @@ func isNumber(node goast.Node) (ok bool, val float64) {
 	return false, 0.0
 }
 
-type m struct {
-	args          []goast.Expr
-	rows, columns int
+type Matrix struct {
+	Args       []goast.Expr
+	Rows, Cols int
 }
 
-func (mat m) toAst() goast.Expr {
-	body := append([]goast.Expr{}, mat.args...)
-	body = append(body, createFloat(mat.rows))
-	body = append(body, createFloat(mat.columns))
+func (m Matrix) Ast() goast.Expr {
+	body := append([]goast.Expr{}, m.Args...)
+	body = append(body, createFloat(m.Rows))
+	body = append(body, createFloat(m.Cols))
 	return &goast.CallExpr{
 		Fun:  goast.NewIdent(matrix),
 		Args: body,
 	}
 }
 
-func (matrix m) position(r, c int) int {
-	return c + matrix.columns*r
+func (m Matrix) Position(r, c int) int {
+	return c + m.Cols*r
 }
 
-func isMatrix(e goast.Expr) (mt *m, ok bool) {
+func isMatrix(e goast.Expr) (mt *Matrix, ok bool) {
 	call, ok := e.(*goast.CallExpr)
 	if !ok {
 		return nil, false
@@ -2973,31 +2968,31 @@ func isMatrix(e goast.Expr) (mt *m, ok bool) {
 	if id.Name != matrix {
 		return nil, false
 	}
-	mt = new(m)
+	mt = new(Matrix)
 	if len(call.Args) < 3 {
 		panic(fmt.Errorf("matrix is not valid: %d\n%#v\n%s", len(call.Args), call, astToStr(call)))
 		//fmt.Println(fmt.Errorf("Error : matrix is not valid: %#v\n%s", call, astToStr(call)))
 		//return
 	}
-	mt.args = call.Args[:len(call.Args)-2]
+	mt.Args = call.Args[:len(call.Args)-2]
 	// parse rows and columns
 	ok, v := isNumber(call.Args[len(call.Args)-2])
 	if !ok {
 		return nil, false
 	}
-	mt.rows = int(v)
+	mt.Rows = int(v)
 
 	ok, v = isNumber(call.Args[len(call.Args)-1])
 	if !ok {
 		return nil, false
 	}
-	mt.columns = int(v)
+	mt.Cols = int(v)
 
-	if len(mt.args) != mt.rows*mt.columns {
+	if len(mt.Args) != mt.Rows*mt.Cols {
 		panic(fmt.Errorf("not valid matrix: args=%d rows=%d columns=%d",
-			len(mt.args),
-			mt.rows,
-			mt.columns,
+			len(mt.Args),
+			mt.Rows,
+			mt.Cols,
 		))
 	}
 	return mt, true
@@ -3172,10 +3167,18 @@ func (s summSlice) toAst() goast.Expr {
 	}
 	v := s[0].toAst()
 	for i := 1; i < len(s); i++ {
-		v = &goast.BinaryExpr{
-			X:  v,
-			Op: token.ADD,
-			Y:  s[i].toAst(),
+		if s[i].isNegative {
+			v = &goast.BinaryExpr{
+				X:  v,
+				Op: token.SUB,
+				Y:  s[i].value,
+			}
+		} else {
+			v = &goast.BinaryExpr{
+				X:  v,
+				Op: token.ADD,
+				Y:  s[i].value,
+			}
 		}
 	}
 	return v

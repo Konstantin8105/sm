@@ -47,10 +47,18 @@ func beam() {
 		d2Fdx2   = cal("d2Fdx2", "d("+dFdx+", x); variable(x); constant(l);")
 
 		Kbend = cal("Kbend", "EJ*integral( transpose("+d2Fdx2+") * "+d2Fdx2+",x,0,l);variable(x); constant(l);")
-		// K = cal("K", Kbend + " * l*l*l/EJ")
+		K     = cal("K", Kbend+" * l*l*l/EJ")
 
 		Kg  = cal("KG", "N*integral( transpose("+dFdx+") * "+dFdx+",x,0,l);variable(x); constant(l);")
 		Kg2 = cal("Kg2", "30*l/N * "+Kg)
+
+		wbend  = cal("displ", "matrix(v1, O1, v2, O2, 4,1)")
+		MVbend = cal("MV load", Kbend+" * "+wbend)
+
+		free = cal("free", "matrix(0,1,0,0,4,1)")
+		gfactor = cal("gfactor","( " + Kbend + " * " + free + ")" ) // + " * transpose( " + free + "))")
+
+		// + " * -1/(3.99988*EJ/l)")
 
 		// stress = cal("stress", "transpose("+ddispl+") * "+load)
 	)
@@ -62,9 +70,12 @@ func beam() {
 	_ = inverseL
 	_ = Ψbend
 	_ = Kbend
-	// _=K
+	_ = K
 	_ = Kg
 	_ = Kg2
+	_ = wbend
+	_ = MVbend
+	_ = gfactor
 	//_ = stress
 }
 
