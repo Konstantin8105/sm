@@ -269,7 +269,7 @@ func Sexpr(o io.Writer, expr string) (out string, err error) {
 			return "", err
 		}
 
-		str := astToStr(k)
+		str := AstToStr(k)
 		fmt.Fprintf(o, "%s\n", str)
 		if changed {
 			for e := l.Front(); e != nil; e = e.Next() {
@@ -292,7 +292,7 @@ func Sexpr(o io.Writer, expr string) (out string, err error) {
 		s.iter++
 	}
 
-	out = astToStr(a)
+	out = AstToStr(a)
 
 	return
 }
@@ -322,14 +322,14 @@ func (s *sm) deeper(a goast.Expr, walker func(goast.Expr) (bool, goast.Expr, err
 
 	case *goast.BasicLit:
 		if v.Kind == token.INT {
-			return true, createFloat(v.Value), nil
+			return true, CreateFloat(v.Value), nil
 		}
 
 	case *goast.Ident: // ignore
 
 	case *goast.UnaryExpr:
 		if bas, ok := v.X.(*goast.BasicLit); ok {
-			return true, createFloat(fmt.Sprintf("%v%s", v.Op, bas.Value)), nil
+			return true, CreateFloat(fmt.Sprintf("%v%s", v.Op, bas.Value)), nil
 		}
 		c, e, err := walker(v.X)
 		if err != nil {
@@ -371,7 +371,8 @@ func (s *sm) deeper(a goast.Expr, walker func(goast.Expr) (bool, goast.Expr, err
 
 //---------------------------------------------------------------------------//
 
-func astToStr(e goast.Expr) string {
+// AstToStr convert golang ast expression to string
+func AstToStr(e goast.Expr) string {
 	var buf bytes.Buffer
 	printer.Fprint(&buf, token.NewFileSet(), e)
 	return buf.String()
@@ -456,9 +457,9 @@ func (s *sm) walk(a goast.Expr) (c bool, result goast.Expr, _ error) {
 	}
 	s.iter++
 	// 	{ // compare the true changes
-	// 		begin := astToStr(a)
+	// 		begin := AstToStr(a)
 	// 		defer func() {
-	// 			end := astToStr(result)
+	// 			end := AstToStr(result)
 	// 			if begin == end {
 	// 				c = false
 	// 			}
@@ -472,12 +473,12 @@ func (s *sm) walk(a goast.Expr) (c bool, result goast.Expr, _ error) {
 	//	if counter == 1 {
 	//		fmt.Println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>", s.iter)
 	//		defer func() {
-	//			fmt.Println(counter, astToStr(a))
+	//			fmt.Println(counter, AstToStr(a))
 	//		}()
 	//	}
-	//	fmt.Println("IN :",counter, astToStr(a))
+	//	fmt.Println("IN :",counter, AstToStr(a))
 	//	defer func(){
-	//		fmt.Println("OUT:",counter, astToStr(result))
+	//		fmt.Println("OUT:",counter, AstToStr(result))
 	//	}()
 
 	// c , k, _ := s.openParen(a)
@@ -493,10 +494,10 @@ func (s *sm) walk(a goast.Expr) (c bool, result goast.Expr, _ error) {
 		//_ = numRule
 		// debug
 		//	fmt.Printf("rules = %3d\tfrom: `%s` to `%s`\n",
-		//		numRule, astToStr(a), astToStr(r))
+		//		numRule, AstToStr(a), AstToStr(r))
 		//	debug(r)
 		//			a = r
-		a, err = parser.ParseExpr(astToStr(r))
+		a, err = parser.ParseExpr(AstToStr(r))
 		if err != nil {
 			return
 		}
@@ -547,10 +548,10 @@ func (s *sm) walk(a goast.Expr) (c bool, result goast.Expr, _ error) {
 				_ = numRule
 				// debug
 				//	fmt.Printf("rules = %3d\tfrom: `%s` to `%s`\n",
-				//		numRule, astToStr(a), astToStr(r))
+				//		numRule, AstToStr(a), AstToStr(r))
 				//	debug(r)
 				//			a = r
-				a, err = parser.ParseExpr(astToStr(r))
+				a, err = parser.ParseExpr(AstToStr(r))
 				if err != nil {
 					return
 				}
@@ -586,9 +587,9 @@ func (s *sm) inject(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 	// to:
 	// (1.000*1.000/2.000)
 	//
-	body := astToStr(call.Args[0])
-	vars := astToStr(call.Args[1])
-	data := astToStr(call.Args[2])
+	body := AstToStr(call.Args[0])
+	vars := AstToStr(call.Args[1])
+	data := AstToStr(call.Args[2])
 
 	a, err := parser.ParseExpr(strings.Replace(body, vars, data, -1))
 	if err != nil {
@@ -620,16 +621,12 @@ func (s *sm) matrixTranspose(e goast.Expr) (changed bool, r goast.Expr, _ error)
 	}
 
 	// transpose
-	var trans Matrix
-	trans.Args = make([]goast.Expr, len(mt.Args))
-	trans.Rows = mt.Cols
-	trans.Cols = mt.Rows
+	trans := CreateMatrix(mt.Cols, mt.Rows)
 	for r := 0; r < mt.Rows; r++ {
 		for c := 0; c < mt.Cols; c++ {
 			trans.Args[trans.Position(c, r)] = mt.Args[mt.Position(r, c)]
 		}
 	}
-
 	return true, trans.Ast(), nil
 }
 
@@ -666,13 +663,9 @@ func (s *sm) matrixDet(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 
 	// determinant of matrix
 	var dm goast.Expr
-	dm = createFloat(0.0)
+	dm = CreateFloat(0.0)
 	for i := 0; i < size; i++ {
-		var mat Matrix
-
-		mat.Rows = size - 1
-		mat.Cols = size - 1
-		mat.Args = make([]goast.Expr, mat.Cols*mat.Rows)
+		mat:= CreateMatrix(size-1, size-1)
 		for row := 1; row < size; row++ {
 			for c := 0; c < size-1; c++ {
 				col := c
@@ -741,7 +734,7 @@ func (s *sm) matrixInverse(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 	size := mt.Cols
 
 	value := &goast.BinaryExpr{
-		X:  createFloat(1.0),
+		X:  CreateFloat(1.0),
 		Op: token.QUO,
 		Y: &goast.CallExpr{
 			Fun:  goast.NewIdent(det),
@@ -750,16 +743,10 @@ func (s *sm) matrixInverse(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 	}
 
 	// prepare of matrix
-	var mat Matrix
-	mat.Rows = size
-	mat.Cols = size
-	mat.Args = make([]goast.Expr, mat.Cols*mat.Rows)
+	mat := CreateMatrix(size, size)
 	for r := 0; r < size; r++ {
 		for c := 0; c < size; c++ {
-			var part Matrix
-			part.Rows = size - 1
-			part.Cols = size - 1
-			part.Args = make([]goast.Expr, part.Cols*part.Rows)
+			part := CreateMatrix(size-1,size-1)
 			for row := 0; row < size-1; row++ {
 				for col := 0; col < size-1; col++ {
 					row2, col2 := row, col
@@ -773,8 +760,8 @@ func (s *sm) matrixInverse(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 				}
 			}
 			body := append([]goast.Expr{}, part.Args...)
-			body = append(body, createFloat(size-1))
-			body = append(body, createFloat(size-1))
+			body = append(body, CreateFloat(size-1))
+			body = append(body, CreateFloat(size-1))
 			detm := &goast.CallExpr{
 				Fun:  goast.NewIdent(det),
 				Args: []goast.Expr{part.Ast()},
@@ -782,7 +769,7 @@ func (s *sm) matrixInverse(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 			mat.Args[mat.Position(r, c)] = detm
 			if (r+c)%2 != 0 {
 				mat.Args[mat.Position(r, c)] = &goast.BinaryExpr{
-					X:  createFloat(-1.0),
+					X:  CreateFloat(-1.0),
 					Op: token.MUL,
 					Y:  mat.Args[mat.Position(r, c)],
 				}
@@ -1088,7 +1075,7 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		// from : (1/l*l)
 		// to   : 1
 		if leftBin, ok := bin.X.(*goast.BinaryExpr); ok && leftBin.Op == token.QUO {
-			if astToStr(bin.Y) == astToStr(leftBin.Y) {
+			if AstToStr(bin.Y) == AstToStr(leftBin.Y) {
 				return true, leftBin.X, nil
 			}
 		}
@@ -1096,7 +1083,7 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		// from : (l *(1/l))
 		// to   : 1
 		if rightBin, ok := bin.Y.(*goast.BinaryExpr); ok && rightBin.Op == token.QUO {
-			if astToStr(bin.X) == astToStr(rightBin.Y) {
+			if AstToStr(bin.X) == AstToStr(rightBin.Y) {
 				return true, rightBin.X, nil
 			}
 		}
@@ -1156,7 +1143,7 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 			ok2, v2 := isNumber(ma[i])
 			if ok1 && ok2 {
 				mt := ma[:i-1]
-				mt = append(mt, createFloat(v1*v2))
+				mt = append(mt, CreateFloat(v1*v2))
 				mt = append(mt, ma[i+1:]...)
 				return true, multiplySlice(mt).toAst(), nil
 			}
@@ -1168,7 +1155,7 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	again:
 		for ui := range up {
 			for di := range do {
-				if astToStr(up[ui]) != astToStr(do[di]) {
+				if AstToStr(up[ui]) != AstToStr(do[di]) {
 					continue
 				}
 				up = append(up[:ui], up[ui+1:]...)
@@ -1178,10 +1165,10 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 			}
 		}
 		if len(up) == 0 {
-			up = append([]goast.Expr{}, createFloat(1.0))
+			up = append([]goast.Expr{}, CreateFloat(1.0))
 		}
 		if len(do) == 0 {
-			do = append([]goast.Expr{}, createFloat(1.0))
+			do = append([]goast.Expr{}, CreateFloat(1.0))
 		}
 		if 0 < amount {
 			return true, &goast.BinaryExpr{
@@ -1197,7 +1184,7 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 			if un, ok := up[i].(*goast.UnaryExpr); ok {
 				value := &goast.UnaryExpr{
 					Op: un.Op,
-					X:  createFloat(1),
+					X:  CreateFloat(1),
 				}
 				up[i] = un.X
 				up = append(up, value)
@@ -1212,7 +1199,7 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 			if un, ok := do[i].(*goast.UnaryExpr); ok {
 				value := &goast.UnaryExpr{
 					Op: un.Op,
-					X:  createFloat(1),
+					X:  CreateFloat(1),
 				}
 				do[i] = un.X
 				do = append(do, value)
@@ -1246,24 +1233,24 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 			if num != 1.0 && 1 < counter {
 				if len(do) == 0 {
 					if len(up) == 0 {
-						return true, createFloat(num), nil
+						return true, CreateFloat(num), nil
 					}
 					return true, &goast.BinaryExpr{
-						X:  createFloat(num),
+						X:  CreateFloat(num),
 						Op: token.MUL,
 						Y:  up.toAst(),
 					}, nil
 				}
 				if len(up) == 0 {
 					return true, &goast.BinaryExpr{
-						X:  createFloat(num),
+						X:  CreateFloat(num),
 						Op: token.QUO,
 						Y:  do.toAst(),
 					}, nil
 				}
 				return true, &goast.BinaryExpr{
 					X: &goast.BinaryExpr{
-						X:  createFloat(num),
+						X:  CreateFloat(num),
 						Op: token.MUL,
 						Y:  up.toAst(),
 					},
@@ -1286,7 +1273,7 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 				if j <= i {
 					continue
 				}
-				if astToStr(sum[i].value) != astToStr(sum[j].value) {
+				if AstToStr(sum[i].value) != AstToStr(sum[j].value) {
 					continue
 				}
 				if sum[i].isNegative != sum[j].isNegative {
@@ -1298,14 +1285,14 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 					if 0 < len(s) {
 						return true, s.toAst(), nil
 					} else {
-						return true, createFloat(0), nil
+						return true, CreateFloat(0), nil
 					}
 				}
 				// summ of 2 same
 				sum[i] = sliceSumm{
 					isNegative: false,
 					value: &goast.BinaryExpr{
-						X:  createFloat(2),
+						X:  CreateFloat(2),
 						Op: token.MUL,
 						Y:  sum[i].toAst(),
 					},
@@ -1323,8 +1310,8 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 				// to   : (a + b) * x
 				if left, ok := parseMulArray(sum[i].toAst()); ok && 1 < len(left) {
 					if right, ok := parseMulArray(sum[j].toAst()); ok && 1 < len(right) {
-						if astToStr(multiplySlice(left[1:]).toAst()) !=
-							astToStr(multiplySlice(right[1:]).toAst()) {
+						if AstToStr(multiplySlice(left[1:]).toAst()) !=
+							AstToStr(multiplySlice(right[1:]).toAst()) {
 							continue
 						}
 						if ok, _ := isNumber(left[0]); !ok {
@@ -1358,8 +1345,8 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 						valWithoutSign = un.X
 						op = un.Op
 					}
-					if astToStr(multiplySlice(left[1:]).toAst()) !=
-						astToStr(valWithoutSign) {
+					if AstToStr(multiplySlice(left[1:]).toAst()) !=
+						AstToStr(valWithoutSign) {
 						continue
 					}
 					if ok, _ := isNumber(left[0]); !ok {
@@ -1371,7 +1358,7 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 							X: &goast.BinaryExpr{
 								X:  left[0],
 								Op: op,
-								Y:  createFloat(1),
+								Y:  CreateFloat(1),
 							},
 							Op: token.MUL,
 							Y:  multiplySlice(left[1:]).toAst(),
@@ -1409,7 +1396,7 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	//
 	if bin.Op == token.MUL && (leftBin.Op == token.QUO || leftBin.Op == token.MUL) {
 		return true, &goast.BinaryExpr{
-			X:  createFloat(v1 * v2),
+			X:  CreateFloat(v1 * v2),
 			Op: leftBin.Op,
 			Y:  leftBin.Y,
 		}, nil
@@ -1428,7 +1415,7 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	// (number1 + number2) +- (...)
 	if bin.Op == token.ADD {
 		return true, &goast.BinaryExpr{
-			X:  createFloat(v1 + v2),
+			X:  CreateFloat(v1 + v2),
 			Op: leftBin.Op,
 			Y:  leftBin.Y,
 		}, nil
@@ -1439,7 +1426,7 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	// (number1 - number2) - (...)
 	if bin.Op == token.SUB && leftBin.Op == token.ADD {
 		return true, &goast.BinaryExpr{
-			X:  createFloat(v1 - v2),
+			X:  CreateFloat(v1 - v2),
 			Op: token.SUB,
 			Y:  leftBin.Y,
 		}, nil
@@ -1449,7 +1436,7 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	// to:
 	// (number1 - number2) + (...)
 	return true, &goast.BinaryExpr{
-		X:  createFloat(v1 - v2),
+		X:  CreateFloat(v1 - v2),
 		Op: token.ADD,
 		Y:  leftBin.Y,
 	}, nil
@@ -1664,7 +1651,7 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 								&goast.BinaryExpr{
 									X:  exp,
 									Op: token.SUB,
-									Y:  createFloat("1.000"),
+									Y:  CreateFloat("1.000"),
 								},
 							},
 						},
@@ -1680,7 +1667,7 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		// 0.000
 		num, _ := isNumber(call.Args[0])
 		if num {
-			return true, createFloat("0"), nil
+			return true, CreateFloat("0"), nil
 		}
 	}
 	{
@@ -1690,7 +1677,7 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		// 1.000
 		if x, ok := call.Args[0].(*goast.Ident); ok {
 			if x.Name == dvar {
-				return true, createFloat("1"), nil
+				return true, CreateFloat("1"), nil
 			}
 		}
 	}
@@ -1700,7 +1687,7 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		// to:
 		// constant * d(1.000,x)
 		if s.isConstant(call.Args[0]) {
-			call.Args[0] = createFloat("1")
+			call.Args[0] = CreateFloat("1")
 			return true, &goast.BinaryExpr{
 				X:  call.Args[0],
 				Op: token.MUL,
@@ -1715,7 +1702,7 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		// 0.000
 		if id, ok := call.Args[0].(*goast.Ident); ok {
 			if ok := s.isFunction(id.Name, dvar); !ok {
-				return true, createFloat("0.0"), nil
+				return true, CreateFloat("0.0"), nil
 			}
 		}
 	}
@@ -1772,7 +1759,7 @@ func (s *sm) functionPow(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		// pow(..., 0)
 		// to:
 		// 1
-		return true, createFloat("1"), nil
+		return true, CreateFloat("1"), nil
 	}
 
 	if exn > 0 {
@@ -1789,7 +1776,7 @@ func (s *sm) functionPow(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 				Fun: goast.NewIdent(pow),
 				Args: []goast.Expr{
 					x2,
-					createFloat(fmt.Sprintf("%d", exn-1)),
+					CreateFloat(fmt.Sprintf("%d", exn-1)),
 				},
 			},
 		}, nil
@@ -1806,12 +1793,12 @@ func (s *sm) functionPow(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 			Fun: goast.NewIdent(pow),
 			Args: []goast.Expr{
 				x1,
-				createFloat(fmt.Sprintf("%d", exn+1)),
+				CreateFloat(fmt.Sprintf("%d", exn+1)),
 			},
 		},
 		Op: token.MUL,
 		Y: &goast.BinaryExpr{
-			X:  createFloat("1"),
+			X:  CreateFloat("1"),
 			Op: token.QUO,
 			Y:  x2,
 		},
@@ -1886,9 +1873,9 @@ func (s *sm) openParenLeft(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		//	any1 + any1
 		// to:
 		//	2.000 * any1
-		if astToStr(v.X) == astToStr(v.Y) {
+		if AstToStr(v.X) == AstToStr(v.Y) {
 			return true, &goast.BinaryExpr{
-				X:  createFloat(2.000),
+				X:  CreateFloat(2.000),
 				Op: token.MUL,
 				Y:  v.X,
 			}, nil
@@ -1902,10 +1889,10 @@ func (s *sm) openParenLeft(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		for i := 0; i < 2; i++ {
 			if right, ok := y.(*goast.BinaryExpr); ok && right.Op == token.MUL {
 				if ok, _ := isNumber(right.X); ok {
-					if astToStr(x) == astToStr(right.Y) {
+					if AstToStr(x) == AstToStr(right.Y) {
 						return true, &goast.BinaryExpr{
 							X: &goast.BinaryExpr{
-								X:  createFloat(1.000),
+								X:  CreateFloat(1.000),
 								Op: token.ADD,
 								Y:  right.X,
 							},
@@ -1926,7 +1913,7 @@ func (s *sm) openParenLeft(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 			if ok, _ := isNumber(left.X); ok {
 				if right, ok := v.Y.(*goast.BinaryExpr); ok && right.Op == token.MUL {
 					if ok, _ := isNumber(right.X); ok {
-						if astToStr(left.Y) == astToStr(right.Y) {
+						if AstToStr(left.Y) == AstToStr(right.Y) {
 							return true, &goast.BinaryExpr{
 								X: &goast.BinaryExpr{
 									X:  left.X,
@@ -1948,8 +1935,8 @@ func (s *sm) openParenLeft(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		//	any1 - any1
 		// to:
 		//	0
-		if astToStr(v.X) == astToStr(v.Y) {
-			return true, createFloat(0.000), nil
+		if AstToStr(v.X) == AstToStr(v.Y) {
+			return true, CreateFloat(0.000), nil
 		}
 
 		// from:
@@ -1962,7 +1949,7 @@ func (s *sm) openParenLeft(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 					X:  v.X,
 					Op: token.ADD,
 					Y: &goast.BinaryExpr{
-						X:  createFloat(-val),
+						X:  CreateFloat(-val),
 						Op: token.MUL,
 						Y:  right.Y,
 					},
@@ -2038,7 +2025,7 @@ func (s *sm) openParenLeft(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	// 		if ok, _ := isNumber(v.Y); ok || s.isConstant(v.Y) {
 	// 			return true, &goast.BinaryExpr{
 	// 				X: &goast.BinaryExpr{
-	// 					X:  createFloat("1"),
+	// 					X:  CreateFloat("1"),
 	// 					Op: token.QUO,
 	// 					Y:  v.Y,
 	// 				},
@@ -2072,7 +2059,7 @@ func (s *sm) openParenLeft(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	// 					},
 	// 					Op: token.MUL,
 	// 					Y: &goast.BinaryExpr{
-	// 						X:  createFloat("1"),
+	// 						X:  CreateFloat("1"),
 	// 						Op: token.QUO,
 	// 						Y:  right.Y,
 	// 					},
@@ -2124,12 +2111,12 @@ func (s *sm) zeroValueMul(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 	// any * zero
 	// zero * any
 	if bin.Op == token.MUL && (isZero(bin.X) || isZero(bin.Y)) {
-		return true, createFloat(0.0), nil
+		return true, CreateFloat(0.0), nil
 	}
 
 	// zero / any
 	if bin.Op == token.QUO && isZero(bin.X) {
-		return true, createFloat(0.0), nil
+		return true, CreateFloat(0.0), nil
 	}
 
 	return false, nil, nil
@@ -2280,7 +2267,7 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 	var possibleExtract func(e goast.Expr) (result bool)
 	possibleExtract = func(e goast.Expr) (result bool) {
 		//	defer func(){
-		//		fmt.Println(	">>", astToStr(e), result)
+		//		fmt.Println(	">>", AstToStr(e), result)
 		//	}()
 		// constants or numbers
 		if ok, v := isNumber(e); ok && v != 1.0 {
@@ -2388,7 +2375,7 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 				continue
 			}
 			value := &goast.BinaryExpr{
-				X:  createFloat(1),
+				X:  CreateFloat(1),
 				Op: token.QUO,
 				Y:  do[i],
 			}
@@ -2432,9 +2419,9 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 	// inject(pow(x,1+1)/(1+1), x, 1) - inject(pow(x,1+1)/(1+1), x, 0)
 	//
 	{
-		body := astToStr(function)
-		n := float64(strings.Count(body, astToStr(variable)))
-		body = strings.Replace(body, astToStr(variable), "", -1)
+		body := AstToStr(function)
+		n := float64(strings.Count(body, AstToStr(variable)))
+		body = strings.Replace(body, AstToStr(variable), "", -1)
 		body = strings.Replace(body, "(", "", -1)
 		body = strings.Replace(body, ")", "", -1)
 		body = strings.Replace(body, "*", "", -1)
@@ -2445,13 +2432,13 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 				Fun: goast.NewIdent("pow"),
 				Args: []goast.Expr{
 					variable,
-					createFloat(fmt.Sprintf("%15e", n+1.0)),
+					CreateFloat(fmt.Sprintf("%15e", n+1.0)),
 				},
 			}
 			div := &goast.BinaryExpr{
 				X:  power,
 				Op: token.QUO,
-				Y:  createFloat(fmt.Sprintf("%15e", n+1.0)),
+				Y:  CreateFloat(fmt.Sprintf("%15e", n+1.0)),
 			}
 			return true, &goast.BinaryExpr{
 				X: &goast.CallExpr{
@@ -2499,28 +2486,28 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 	// if ok, v := isNumber(function); ok {
 	// 	switch v {
 	// 	case 0.0:
-	// 		return true, createFloat("0.000"), nil
+	// 		return true, CreateFloat("0.000"), nil
 	//
 	// 	case 1.0:
 	// 		return true, &goast.ParenExpr{
 	// 			X: &goast.BinaryExpr{
-	// 				X:  createFloat(fmt.Sprintf("%15e", to)),
+	// 				X:  CreateFloat(fmt.Sprintf("%15e", to)),
 	// 				Op: token.SUB, // -
-	// 				Y:  createFloat(fmt.Sprintf("%15e", from)),
+	// 				Y:  CreateFloat(fmt.Sprintf("%15e", from)),
 	// 			},
 	// 		}, nil
 	//
 	// 		//	default:
 	// 		//		return true, &goast.BinaryExpr{
-	// 		//			X:  createFloat(fmt.Sprintf("%15e", v)),
+	// 		//			X:  CreateFloat(fmt.Sprintf("%15e", v)),
 	// 		//			Op: token.MUL,
 	// 		//			Y: &goast.CallExpr{
 	// 		//				Fun: goast.NewIdent(integralName),
 	// 		//				Args: []goast.Expr{
-	// 		//					createFloat(fmt.Sprintf("%15e", 1.0)),
+	// 		//					CreateFloat(fmt.Sprintf("%15e", 1.0)),
 	// 		//					variable,
-	// 		//					createFloat(fmt.Sprintf("%15e", from)),
-	// 		//					createFloat(fmt.Sprintf("%15e", to)),
+	// 		//					CreateFloat(fmt.Sprintf("%15e", from)),
+	// 		//					CreateFloat(fmt.Sprintf("%15e", to)),
 	// 		//				},
 	// 		//			},
 	// 		//		}, nil
@@ -2888,14 +2875,14 @@ func (s *sm) constants(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		panic(v.Op)
 	}
 
-	return true, createFloat(fmt.Sprintf("%.15e", result)), nil
+	return true, CreateFloat(fmt.Sprintf("%.15e", result)), nil
 }
 
 // FloatFormat is format of float value, for more precision calculation use
 // value equal 12.
 var FloatFormat int = 3
 
-func createFloat(value interface{}) *goast.BasicLit {
+func CreateFloat(value interface{}) *goast.BasicLit {
 	switch v := value.(type) {
 	case float64:
 		format := fmt.Sprintf("%%.%df", FloatFormat)
@@ -2904,15 +2891,15 @@ func createFloat(value interface{}) *goast.BasicLit {
 			Value: fmt.Sprintf(format, v),
 		}
 	case int:
-		return createFloat(float64(v))
+		return CreateFloat(float64(v))
 	case string:
 		val, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
 		if err != nil {
 			panic(fmt.Errorf("`%s` : %v", value, err))
 		}
-		return createFloat(val)
+		return CreateFloat(val)
 	}
-	panic(fmt.Errorf("createFloat: %#v", value))
+	panic(fmt.Errorf("CreateFloat: %#v", value))
 }
 
 func isNumber(node goast.Node) (ok bool, val float64) {
@@ -2944,8 +2931,8 @@ type Matrix struct {
 
 func (m Matrix) Ast() goast.Expr {
 	body := append([]goast.Expr{}, m.Args...)
-	body = append(body, createFloat(m.Rows))
-	body = append(body, createFloat(m.Cols))
+	body = append(body, CreateFloat(m.Rows))
+	body = append(body, CreateFloat(m.Cols))
 	return &goast.CallExpr{
 		Fun:  goast.NewIdent(matrix),
 		Args: body,
@@ -2954,6 +2941,35 @@ func (m Matrix) Ast() goast.Expr {
 
 func (m Matrix) Position(r, c int) int {
 	return c + m.Cols*r
+}
+
+func (m Matrix) String() string {
+	var out string
+	for r := 0; r < m.Rows; r++ {
+		for c := 0; c < m.Cols; c++ {
+			out += fmt.Sprintf("[%2d,%2d] : %s\n", r, c, AstToStr(m.Args[m.Position(r, c)]))
+		}
+	}
+	return out
+}
+
+func CreateMatrix(r, c int) (m *Matrix) {
+	m = new(Matrix)
+	m.Rows = r
+	m.Cols = c
+	m.Args = make([]goast.Expr, r*c)
+	for pos := range m.Args {
+		m.Args[pos] = CreateFloat(0)
+	}
+	return
+}
+
+func ParseMatrix(str string) (m *Matrix, ok bool) {
+	expr, err := parser.ParseExpr(str)
+	if err != nil {
+		return nil, false
+	}
+	return isMatrix(expr)
 }
 
 func isMatrix(e goast.Expr) (mt *Matrix, ok bool) {
@@ -2970,8 +2986,8 @@ func isMatrix(e goast.Expr) (mt *Matrix, ok bool) {
 	}
 	mt = new(Matrix)
 	if len(call.Args) < 3 {
-		panic(fmt.Errorf("matrix is not valid: %d\n%#v\n%s", len(call.Args), call, astToStr(call)))
-		//fmt.Println(fmt.Errorf("Error : matrix is not valid: %#v\n%s", call, astToStr(call)))
+		panic(fmt.Errorf("matrix is not valid: %d\n%#v\n%s", len(call.Args), call, AstToStr(call)))
+		//fmt.Println(fmt.Errorf("Error : matrix is not valid: %#v\n%s", call, AstToStr(call)))
 		//return
 	}
 	mt.Args = call.Args[:len(call.Args)-2]
@@ -3015,7 +3031,7 @@ func isTranspose(e goast.Expr) (ok bool) {
 
 func debug(e goast.Expr) {
 	fmt.Println("-------------")
-	fmt.Println(astToStr(e))
+	fmt.Println(AstToStr(e))
 	goast.Print(token.NewFileSet(), e)
 	fmt.Println("-------------")
 }
@@ -3033,9 +3049,9 @@ func parseMulArray(e goast.Expr) (ma multiplySlice, ok bool) {
 		}
 		if un.Op == token.SUB {
 			if ok, n := isNumber(mm[0]); ok {
-				mm[0] = createFloat(-n)
+				mm[0] = CreateFloat(-n)
 			} else {
-				mm = append(mm, createFloat(-1))
+				mm = append(mm, CreateFloat(-1))
 			}
 		}
 		return mm, ok
@@ -3057,7 +3073,7 @@ func parseMulArray(e goast.Expr) (ma multiplySlice, ok bool) {
 		}
 		ma = append(ma, left...)
 		ma = append(ma, &goast.BinaryExpr{
-			X:  createFloat(1.0),
+			X:  CreateFloat(1.0),
 			Op: token.QUO,
 			Y:  bin.Y,
 		})
@@ -3104,14 +3120,14 @@ func parseQuoArray(e goast.Expr) (up, do multiplySlice, ok bool) {
 			return nil, nil, false
 		}
 		if un.Op == token.SUB {
-			up = append(up, createFloat(-1))
+			up = append(up, CreateFloat(-1))
 		}
 		return up, do, ok
 	}
 	bin, ok := e.(*goast.BinaryExpr)
 	if !ok {
 		up = append(up, e)
-		do = append(do, createFloat(1))
+		do = append(do, CreateFloat(1))
 		ok = true
 		return
 	}
@@ -3121,14 +3137,14 @@ func parseQuoArray(e goast.Expr) (up, do multiplySlice, ok bool) {
 		up3, do3, ok3 := parseQuoArray(bin.Y)
 		if !ok2 || !ok3 {
 			up = append(up, e)
-			do = append(do, createFloat(1))
+			do = append(do, CreateFloat(1))
 			ok = true
 			return
 		}
 		up = append(up2, up3...)
 		do = append(do2, do3...)
 		if len(do) == 0 {
-			do = append(do, createFloat(1))
+			do = append(do, CreateFloat(1))
 		}
 		ok = true
 
@@ -3140,13 +3156,13 @@ func parseQuoArray(e goast.Expr) (up, do multiplySlice, ok bool) {
 
 	default:
 		up = append(up, e)
-		do = append(do, createFloat(1))
+		do = append(do, CreateFloat(1))
 		ok = true
 	}
 	//
 	// if bin.Op == token.MUL {
 	// 	up, ok = parseMulArray(e)
-	// 	do = append([]goast.Expr{}, createFloat(1))
+	// 	do = append([]goast.Expr{}, CreateFloat(1))
 	// 	return
 	// }
 	// if bin.Op != token.QUO {
@@ -3201,10 +3217,10 @@ func (s sliceSumm) toAst() goast.Expr {
 
 func parseSummArray(e goast.Expr) (s summSlice) {
 	// 	defer func() {
-	// 		fmt.Println(">>>", astToStr(s.toAst()))
+	// 		fmt.Println(">>>", AstToStr(s.toAst()))
 	// 		sd := []sliceSumm(s)
 	// 		for i := range sd {
-	// 			fmt.Println(">", astToStr(sd[i].toAst()), sd[i])
+	// 			fmt.Println(">", AstToStr(sd[i].toAst()), sd[i])
 	// 			debug(sd[i].value)
 	// 		}
 	// 	}()
