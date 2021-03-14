@@ -857,6 +857,27 @@ func (s *sm) divide(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	if rightBin, ok := bin.Y.(*goast.BinaryExpr); ok && rightBin.Op == token.QUO {
 		// from :  a/(b/c)
 		// to   :  (a*c)/b
+		if ok, n := isNumber(rightBin.X); ok && n == 1 {
+			return true, &goast.BinaryExpr{
+				X:  bin.X,
+				Op: token.MUL,
+				Y:  rightBin.Y,
+			}, nil
+		}
+		if ok, n := isNumber(bin.X); ok && n == 1 {
+			return true, &goast.BinaryExpr{
+				X:  rightBin.Y,
+				Op: token.QUO,
+				Y:  rightBin.X,
+			}, nil
+		}
+		if ok, n := isNumber(rightBin.Y); ok && n == 1 {
+			return true, &goast.BinaryExpr{
+				X:  bin.X,
+				Op: token.QUO,
+				Y:  rightBin.X,
+			}, nil
+		}
 		return true, &goast.BinaryExpr{
 			X: &goast.BinaryExpr{
 				X:  bin.X,
@@ -873,6 +894,17 @@ func (s *sm) divide(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	}
 	if leftBin.Op != token.QUO {
 		return false, nil, nil
+	}
+
+	if ok, n := isNumber(bin.Y); ok && n == 1 {
+		return true, leftBin, nil
+	}
+	if ok, n := isNumber(leftBin.Y); ok && n == 1 {
+		return true, &goast.BinaryExpr{
+			X:  leftBin.X,
+			Op: token.QUO,
+			Y:  bin.Y,
+		}, nil
 	}
 
 	//  from :  (a / b) / c
