@@ -37,6 +37,7 @@ type sm struct {
 	vars []string
 	funs []function
 	iter int64
+	out  io.Writer
 }
 
 func (s sm) isConstant(e goast.Expr) bool {
@@ -161,6 +162,7 @@ func Sexpr(o io.Writer, expr string) (out string, err error) {
 
 	var s sm
 	s.base = expr
+	s.out = o
 
 	// split expression
 	lines := strings.Split(expr, ";")
@@ -241,6 +243,10 @@ func Sexpr(o io.Writer, expr string) (out string, err error) {
 		}
 	}
 
+	return s.run()
+}
+
+func (s *sm) run() (out string, err error) {
 	// parse base expression
 	var a goast.Expr
 	a, err = parser.ParseExpr(s.base)
@@ -270,7 +276,8 @@ func Sexpr(o io.Writer, expr string) (out string, err error) {
 		}
 
 		str := AstToStr(k)
-		fmt.Fprintf(o, "%s\n", str)
+		s.base = str
+		fmt.Fprintf(s.out, "%s\n", str)
 		if changed {
 			for e := l.Front(); e != nil; e = e.Next() {
 				listStr := e.Value.(string)
@@ -474,12 +481,12 @@ func (s *sm) walk(a goast.Expr) (c bool, result goast.Expr, _ error) {
 			s.sortIdentMul,
 			s.functionPow,
 			s.oneMul,
+			s.divide,
 			s.binaryNumber,
 			s.binaryUnary,
 			s.zeroValueMul,
 			s.differential,
 			s.divideDivide,
-			s.divide,
 			s.matrixTranspose,
 			s.matrixDet,
 			s.matrixInverse,
@@ -618,12 +625,23 @@ func (s *sm) matrixDet(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 			Args: []goast.Expr{mat.Ast()},
 		}
 
+		value := mt.Args[mt.Position(0, i)]
+
+		if ok, n := isNumber(value); ok && n == 0.0 {
+			dm = &goast.BinaryExpr{
+				X:  dm,
+				Op: token.ADD,
+				Y:  CreateFloat(0.0),
+			}
+			continue
+		}
+
 		if i%2 == 0 || i == 0 {
 			dm = &goast.BinaryExpr{
 				X:  dm,
 				Op: token.ADD,
 				Y: &goast.BinaryExpr{
-					X:  mt.Args[mt.Position(0, i)],
+					X:  value,
 					Op: token.MUL,
 					Y:  determinant,
 				},
@@ -633,7 +651,7 @@ func (s *sm) matrixDet(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 				X:  dm,
 				Op: token.SUB,
 				Y: &goast.BinaryExpr{
-					X:  mt.Args[mt.Position(0, i)],
+					X:  value,
 					Op: token.MUL,
 					Y:  determinant,
 				},
@@ -670,7 +688,8 @@ func (s *sm) matrixInverse(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 	}
 	size := mt.Cols
 
-	value := &goast.BinaryExpr{
+	var value goast.Expr
+	value = &goast.BinaryExpr{
 		X:  CreateFloat(1.0),
 		Op: token.QUO,
 		Y: &goast.CallExpr{
@@ -678,6 +697,15 @@ func (s *sm) matrixInverse(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 			Args: []goast.Expr{call.Args[0]},
 		},
 	}
+
+	base := s.base
+	s.base = AstToStr(value)
+	out, err := s.run()
+	if err != nil {
+		return true, nil, err
+	}
+	value = goast.NewIdent(out)
+	s.base = base
 
 	// prepare of matrix
 	mat := CreateMatrix(size, size)
@@ -826,7 +854,20 @@ func (s *sm) divide(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	if bin.Op != token.QUO {
 		return false, nil, nil
 	}
-	leftBin, ok := bin.Y.(*goast.BinaryExpr)
+	if rightBin, ok := bin.Y.(*goast.BinaryExpr); ok && rightBin.Op == token.QUO {
+		// from :  a/(b/c)
+		// to   :  (a*c)/b
+		return true, &goast.BinaryExpr{
+			X: &goast.BinaryExpr{
+				X:  bin.X,
+				Op: token.MUL,
+				Y:  rightBin.Y,
+			},
+			Op: token.QUO,
+			Y:  rightBin.X,
+		}, nil
+	}
+	leftBin, ok := bin.X.(*goast.BinaryExpr)
 	if !ok {
 		return false, nil, nil
 	}
@@ -834,18 +875,16 @@ func (s *sm) divide(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		return false, nil, nil
 	}
 
-	// from:
-	// a/(b/c)
-	// to:
-	// (a*b)/c
+	//  from :  (a / b) / c
+	//  to   :  a / (b * c)
 	return true, &goast.BinaryExpr{
-		X: &goast.BinaryExpr{
-			X:  bin.X,
-			Op: token.MUL,
-			Y:  leftBin.Y,
-		},
+		X:  leftBin.X,
 		Op: token.QUO,
-		Y:  leftBin.X,
+		Y: &goast.BinaryExpr{
+			X:  leftBin.Y,
+			Op: token.MUL,
+			Y:  bin.Y,
+		},
 	}, nil
 }
 
