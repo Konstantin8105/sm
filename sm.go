@@ -1317,30 +1317,29 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 				// to   : (a + b) * x
 				if left, ok := parseMulArray(sum[i].toAst()); ok && 1 < len(left) {
 					if right, ok := parseMulArray(sum[j].toAst()); ok && 1 < len(right) {
-						if AstToStr(multiplySlice(left[1:]).toAst()) !=
+						if AstToStr(multiplySlice(left[1:]).toAst()) ==
 							AstToStr(multiplySlice(right[1:]).toAst()) {
-							continue
-						}
-						if ok, _ := isNumber(left[0]); !ok {
-							continue
-						}
-						if ok, _ := isNumber(right[0]); !ok {
-							continue
-						}
-						sum[i] = sliceSumm{
-							isNegative: false,
-							value: &goast.BinaryExpr{
-								X: &goast.BinaryExpr{
-									X:  left[0],
-									Op: token.ADD,
-									Y:  right[0],
+							if ok, _ := isNumber(left[0]); !ok {
+								continue
+							}
+							if ok, _ := isNumber(right[0]); !ok {
+								continue
+							}
+							sum[i] = sliceSumm{
+								isNegative: false,
+								value: &goast.BinaryExpr{
+									X: &goast.BinaryExpr{
+										X:  left[0],
+										Op: token.ADD,
+										Y:  right[0],
+									},
+									Op: token.MUL,
+									Y:  multiplySlice(left[1:]).toAst(),
 								},
-								Op: token.MUL,
-								Y:  multiplySlice(left[1:]).toAst(),
-							},
+							}
+							sum = append(sum[:j], sum[j+1:]...)
+							return true, sum.toAst(), nil
 						}
-						sum = append(sum[:j], sum[j+1:]...)
-						return true, sum.toAst(), nil
 					}
 				}
 				// from : a * x + x
