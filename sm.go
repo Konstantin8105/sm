@@ -1321,6 +1321,21 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 
 	if sum := parseSummArray(a); 1 < len(sum) {
 		for i := range sum {
+			if i == 0 {
+				continue
+			}
+			s := []sliceSumm(sum)
+			if strings.HasPrefix(AstToStr(s[i].value), "-") {
+				s[i].isNegative = !s[i].isNegative
+				s[i].value = &goast.BinaryExpr{
+					X:  CreateFloat(-1),
+					Op: token.MUL,
+					Y:  s[i].value,
+				}
+				return true, sum.toAst(), nil
+			}
+		}
+		for i := range sum {
 			for j := range sum {
 				if j <= i {
 					continue
@@ -2811,6 +2826,9 @@ func isNumber(node goast.Node) (ok bool, val float64) {
 	if un, ok := node.(*goast.UnaryExpr); ok {
 		if un.Op == token.SUB {
 			unary = -1.0
+			node = un.X
+		} else if un.Op == token.ADD {
+			unary = 1.0
 			node = un.X
 		} else {
 			return false, 0.0
