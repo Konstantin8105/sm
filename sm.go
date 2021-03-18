@@ -2748,6 +2748,10 @@ func (m Matrix) String() string {
 	var out string
 	for r := 0; r < m.Rows; r++ {
 		for c := 0; c < m.Cols; c++ {
+			if ok, n := m.Args[m.Position(r, c)]; ok && n == 0.0 {
+				// do not print zero values
+				continue
+			}
 			out += fmt.Sprintf("[%2d,%2d] : %s\n", r, c, AstToStr(m.Args[m.Position(r, c)]))
 		}
 	}
