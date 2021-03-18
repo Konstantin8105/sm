@@ -2322,6 +2322,64 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 		}
 	}
 
+	// 	if up, do, ok := parseQuoArray(function); ok {
+	// 		swap := func(left, right goast.Expr) (r bool) {
+	// 			if ok, _ := isNumber(left); ok {
+	// 				return
+	// 			}
+	// 			if _, ok := left.(*goast.BinaryExpr); ok {
+	// 				return
+	// 			}
+	// 			if isTranspose(left) {
+	// 				return
+	// 			}
+	// 			if _, ok := isMatrix(left); ok {
+	// 				return
+	// 			}
+	// 			if ok, _ := isNumber(right); ok {
+	// 				return
+	// 			}
+	// 			if _, ok := right.(*goast.BinaryExpr); ok {
+	// 				return
+	// 			}
+	// 			if isTranspose(right) {
+	// 				return
+	// 			}
+	// 			if _, ok := isMatrix(right); ok {
+	// 				return
+	// 			}
+	// 			return AstToStr(left) > AstToStr(right)
+	// 		}
+	// 		for i := range up {
+	// 			for j := range up {
+	// 				if i <= j {
+	// 					if swap(up[i], up[j]) {
+	// 						up[i], up[j] = up[j], up[i]
+	// 						return true, &goast.BinaryExpr{
+	// 							X:  up.toAst(),
+	// 							Op: token.QUO,
+	// 							Y:  do.toAst(),
+	// 						}, nil
+	// 					}
+	// 				}
+	// 			}
+	// 		}
+	// 		for i := range do {
+	// 			for j := range do {
+	// 				if i <= j {
+	// 					if swap(do[i], do[j]) {
+	// 						do[i], do[j] = do[j], do[i]
+	// 						return true, &goast.BinaryExpr{
+	// 							X:  up.toAst(),
+	// 							Op: token.QUO,
+	// 							Y:  do.toAst(),
+	// 						}, nil
+	// 					}
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+
 	if up, do, ok := parseQuoArray(function); ok {
 		for i := range do {
 			if !possibleExtract(do[i]) {
