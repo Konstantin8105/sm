@@ -176,7 +176,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "d(u/v,x);function(u,x);function(v,x)",
-			out:  "(d(u,x)*v - u*d(v,x)) / (v * v)",
+			out:  "d(u,x)/v - u*d(v,x) / (v * v)",
 		},
 		// TODO:
 		// {
@@ -431,7 +431,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "inverse(matrix(a,b,c,d,e,f,g,h,i,3,3)); constant(a,b,c,d,e,f,g,h);",
-			out:  "matrix((e*i-f*h)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),(-1.000*(b*i)+c*h)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),(b*f-c*e)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),(-1.000*(d*i)+f*g)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),(a*i-c*g)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),(-1.000*(a*f)+c*d)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),(d*h-e*g)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),(-1.000*(a*h)+b*g)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),(a*e-b*d)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),3.000,3.000)",
+			out: "matrix(e*i/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))-f*h/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),-1.000*(b*i)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))+c*h/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),b*f/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))-c*e/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),-1.000*(d*i)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))+f*g/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),a*i/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))-c*g/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),-1.000*(a*f)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))+c*d/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),d*h/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))-e*g/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),-1.000*(a*h)/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))+b*g/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),a*e/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g)))-b*d/(a*(e*i)-a*(f*h)-(b*(d*i)-b*(f*g))+(c*(d*h)-c*(e*g))),3.000,3.000)",
 		},
 		{
 			expr: "inverse(matrix(a,b,c,d,2,2))",
@@ -528,6 +528,14 @@ func Test(t *testing.T) {
 		{
 			expr: "2.00000*(l*l)-l*l",
 			out:  "l*l",
+		},
+		{
+			expr: "L*L*det(matrix(A*E/L,0,0,0,4*E*J/L+2*P*L/15,-(6*E*J/(L*L)+P/10),0,-2*(6*E*J/(L*L)+P/10),2*(12*E*J/(L*L*L)+6*P/2/L),3,3))",
+			out:  "24.000*(A*(E*(E*(J*(E*J))))/(L*(L*L)))+22.800*(A*(E*(E*(J*P)))/L)+1.992*(A*(E*(P*(E*J)))/L)+0.778*(L*(A*(E*(P*P))))",
+		},
+		{
+			expr: "(72.000*(A*(E*(E*(J*(E*J)))))+1.200*(L*(L*(A*(E*(E*(J*P)))))))/(A*(E*(E*(J*(L*(L*L))))))",
+			out:  "72.000*(E*J)/(L*(L*L))+1.200*P/L",
 		},
 	}
 

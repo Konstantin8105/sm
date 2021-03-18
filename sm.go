@@ -1157,6 +1157,51 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		}
 	}
 
+	if up, do, ok := parseQuoArray(a); ok && 0 < len(do) {
+		for ui := range up {
+			if bin, ok := up[ui].(*goast.BinaryExpr); ok && (bin.Op == token.ADD || bin.Op == token.SUB) {
+				if len(do) == 1 {
+					if ok, _ := isNumber(do[0]); ok {
+						continue
+					}
+				}
+				if ok, _ := isNumber(bin.X); ok {
+					continue
+				}
+				if ok, _ := isNumber(bin.Y); ok {
+					continue
+				}
+				var U multiplySlice
+				U = append(U, up[:ui]...)
+				U = append(U, up[ui+1:]...)
+				if len(U) == 0 {
+					U = append(U, CreateFloat(1.0))
+				}
+				return true, &goast.BinaryExpr{
+					X: &goast.BinaryExpr{
+						X: &goast.BinaryExpr{
+							X:  U.toAst(),
+							Op: token.MUL,
+							Y:  bin.X,
+						},
+						Op: token.QUO,
+						Y:  do.toAst(),
+					},
+					Op: bin.Op,
+					Y: &goast.BinaryExpr{
+						X: &goast.BinaryExpr{
+							X:  U.toAst(),
+							Op: token.MUL,
+							Y:  bin.Y,
+						},
+						Op: token.QUO,
+						Y:  do.toAst(),
+					},
+				}, nil
+			}
+		}
+	}
+
 	if up, do, ok := parseQuoArray(a); ok {
 		amount := 0
 	again:
@@ -2748,7 +2793,7 @@ func (m Matrix) String() string {
 	var out string
 	for r := 0; r < m.Rows; r++ {
 		for c := 0; c < m.Cols; c++ {
-			if ok, n := m.Args[m.Position(r, c)]; ok && n == 0.0 {
+			if ok, n := isNumber(m.Args[m.Position(r, c)]); ok && n == 0.0 {
 				// do not print zero values
 				continue
 			}
