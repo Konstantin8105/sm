@@ -491,6 +491,7 @@ func (s *sm) walk(a goast.Expr) (c bool, result goast.Expr, _ error) {
 			s.matrixDet,
 			s.matrixInverse,
 			s.matrixMultiply,
+			s.matrixSum,
 			s.mulConstToMatrix,
 			s.integral,
 			s.inject,
@@ -751,6 +752,45 @@ func (s *sm) matrixInverse(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 		},
 	}
 	return true, result, nil
+}
+
+func (s *sm) matrixSum(a goast.Expr) (changed bool, r goast.Expr, _ error) {
+	// matrix(...)*matrix(...)
+	bin, ok := a.(*goast.BinaryExpr)
+	if !ok {
+		return false, nil, nil
+	}
+	if bin.Op != token.ADD {
+		return false, nil, nil
+	}
+
+	left, ok := isMatrix(bin.X)
+	if !ok {
+		return false, nil, nil
+	}
+	right, ok := isMatrix(bin.Y)
+	if !ok {
+		return false, nil, nil
+	}
+	if left.Rows != right.Rows {
+		return false, nil, fmt.Errorf("not valid matrix rows add")
+	}
+	if left.Cols != right.Cols {
+		return false, nil, fmt.Errorf("not valid matrix columns add")
+	}
+
+	result := CreateMatrix(left.Rows, left.Cols)
+	for r := 0; r < left.Rows; r++ {
+		for c := 0; c < left.Cols; c++ {
+			pos := left.Position(r, c)
+			result.Args[pos] = &goast.BinaryExpr{
+				X:  left.Args[pos],  // left
+				Op: token.ADD,       // +
+				Y:  right.Args[pos], // right
+			}
+		}
+	}
+	return true, result.Ast(), nil
 }
 
 func (s *sm) matrixMultiply(a goast.Expr) (changed bool, r goast.Expr, _ error) {
@@ -2862,6 +2902,12 @@ func (m Matrix) Ast() goast.Expr {
 }
 
 func (m Matrix) Position(r, c int) int {
+	if m.Rows <= r {
+		panic("matrix ouside of rows")
+	}
+	if m.Cols <= c {
+		panic("matrix ouside of columns")
+	}
 	return c + m.Cols*r
 }
 
