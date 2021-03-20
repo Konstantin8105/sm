@@ -760,7 +760,7 @@ func (s *sm) matrixSum(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	if !ok {
 		return false, nil, nil
 	}
-	if bin.Op != token.ADD {
+	if !(bin.Op == token.ADD || bin.Op == token.SUB) {
 		return false, nil, nil
 	}
 
@@ -785,7 +785,7 @@ func (s *sm) matrixSum(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 			pos := left.Position(r, c)
 			result.Args[pos] = &goast.BinaryExpr{
 				X:  left.Args[pos],  // left
-				Op: token.ADD,       // +
+				Op: bin.Op,
 				Y:  right.Args[pos], // right
 			}
 		}
