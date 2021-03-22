@@ -549,6 +549,10 @@ func Test(t *testing.T) {
 			expr: "matrix(1,2,1,4,2,2)-matrix(3,4,5,6,2,2)",
 			out: "matrix(-2.000,-2.000,-4.000,-2.000,2.000,2.000)",
 		},
+		{
+			expr: "d(-(6.00000*x/(l*l)), x); variable(x); constant(l);",
+			out: "-(6.000 / (l * l))",
+		},
 	}
 
 	for i := range tcs {

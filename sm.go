@@ -784,7 +784,7 @@ func (s *sm) matrixSum(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		for c := 0; c < left.Cols; c++ {
 			pos := left.Position(r, c)
 			result.Args[pos] = &goast.BinaryExpr{
-				X:  left.Args[pos],  // left
+				X:  left.Args[pos], // left
 				Op: bin.Op,
 				Y:  right.Args[pos], // right
 			}
@@ -1724,6 +1724,20 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 				},
 			}, nil
 		}
+	}
+	// from : d(-(...),x)
+	// to   : -d(...,x)
+	if un, ok := call.Args[0].(*goast.UnaryExpr); ok {
+		return true, &goast.UnaryExpr{
+			Op: un.Op,
+			X: &goast.CallExpr{
+				Fun: goast.NewIdent(differential),
+				Args: []goast.Expr{
+					un.X,
+					id,
+				},
+			},
+		}, nil
 	}
 
 	{
