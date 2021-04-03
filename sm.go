@@ -526,6 +526,19 @@ func (s *sm) inject(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 	if id.Name != injectName {
 		return false, nil, nil
 	}
+	if m, ok := isMatrix(call.Args[0]); ok {
+		for i := range m.Args {
+			m.Args[i] = &goast.CallExpr{
+				Fun: goast.NewIdent(injectName),
+				Args: []goast.Expr{
+					m.Args[i],
+					call.Args[1],
+					call.Args[2],
+				},
+			}
+		}
+		return true, m.Ast(), nil
+	}
 	//
 	// from:
 	// inject(x*x/2.000, x, 1.000)
