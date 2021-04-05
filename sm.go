@@ -40,6 +40,16 @@ type sm struct {
 	out  io.Writer
 }
 
+func (s sm) copy() (c sm) {
+	c.base = s.base
+	c.expr = s.expr
+	c.cons = append([]string{}, s.cons...)
+	c.vars = append([]string{}, s.vars...)
+	c.funs = append([]function{}, s.funs...)
+	c.out = s.out
+	return
+}
+
 func (s sm) isConstant(e goast.Expr) bool {
 	var name string
 	if ind, ok := e.(*goast.Ident); ok {
@@ -305,6 +315,7 @@ func (s *sm) run() (out string, err error) {
 }
 
 func (s *sm) deeper(a goast.Expr, walker func(goast.Expr) (bool, goast.Expr, error)) (c bool, _ goast.Expr, _ error) {
+
 	switch v := a.(type) {
 	case *goast.BinaryExpr:
 		cX, rX, err := walker(v.X)
@@ -712,14 +723,14 @@ func (s *sm) matrixInverse(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 		},
 	}
 
-	base := s.base
-	s.base = AstToStr(value)
-	out, err := s.run()
+	copy := s.copy()
+	copy.base = AstToStr(value)
+	out, err := copy.run()
+	s.iter += copy.iter
 	if err != nil {
 		return true, nil, err
 	}
 	value = goast.NewIdent(out)
-	s.base = base
 
 	// prepare of matrix
 	mat := CreateMatrix(size, size)
@@ -1132,22 +1143,6 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	}
 
 	if bin.Op == token.MUL {
-		// from : (1/l*l)
-		// to   : 1
-		if leftBin, ok := bin.X.(*goast.BinaryExpr); ok && leftBin.Op == token.QUO {
-			if AstToStr(bin.Y) == AstToStr(leftBin.Y) {
-				return true, leftBin.X, nil
-			}
-		}
-
-		// from : (l *(1/l))
-		// to   : 1
-		if rightBin, ok := bin.Y.(*goast.BinaryExpr); ok && rightBin.Op == token.QUO {
-			if AstToStr(bin.X) == AstToStr(rightBin.Y) {
-				return true, rightBin.X, nil
-			}
-		}
-
 		// from : (any1/any2) * (any3/any4)
 		// to   : (any1 * any3) / (any2 * any4)
 		if left, ok := bin.X.(*goast.BinaryExpr); ok && left.Op == token.QUO {
@@ -1258,9 +1253,17 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	if up, do, ok := parseQuoArray(a); ok {
 		amount := 0
 	again:
-		for ui := range up {
-			for di := range do {
-				if AstToStr(up[ui]) != AstToStr(do[di]) {
+		upstr := make([]string, len(up))
+		for i := range up {
+			upstr[i] = AstToStr(up[i])
+		}
+		dostr := make([]string, len(do))
+		for i := range do {
+			dostr[i] = AstToStr(do[i])
+		}
+		for ui := range upstr {
+			for di := range dostr {
+				if upstr[ui] != dostr[di] {
 					continue
 				}
 				up = append(up[:ui], up[ui+1:]...)
@@ -1432,20 +1435,18 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 					if right, ok := parseMulArray(sum[j].toAst()); ok && 1 < len(right) {
 						if AstToStr(multiplySlice(left[1:]).toAst()) ==
 							AstToStr(multiplySlice(right[1:]).toAst()) {
-							if ok, _ := isNumber(left[0]); !ok {
+							ok, v1 := isNumber(left[0])
+							if !ok {
 								continue
 							}
-							if ok, _ := isNumber(right[0]); !ok {
+							ok, v2 := isNumber(right[0])
+							if !ok {
 								continue
 							}
 							sum[i] = sliceSumm{
 								isNegative: false,
 								value: &goast.BinaryExpr{
-									X: &goast.BinaryExpr{
-										X:  left[0],
-										Op: token.ADD,
-										Y:  right[0],
-									},
+									X:  CreateFloat(v1 + v2),
 									Op: token.MUL,
 									Y:  multiplySlice(left[1:]).toAst(),
 								},
@@ -1945,47 +1946,44 @@ func (s *sm) openParenRight(a goast.Expr) (changed bool, r goast.Expr, _ error) 
 	}
 
 	// from:
-	// any * (... -+ ...)
-	// any     L  -+  R
+	// any * (... -+ ... -+ ...)
 	// to:
-	// ((any * X) -+  (any * Y))
-	//   any * L  -+   any * R
-	var any, L, R goast.Expr
-	var Op token.Token
-	b1, ok1 := bin.X.(*goast.BinaryExpr)
-	b2, ok2 := bin.Y.(*goast.BinaryExpr)
-	ispm := func(t token.Token) bool {
-		return t == token.ADD || t == token.SUB
+	// any * ... -+ any * ... -+ any * ...
+	for _, v := range []struct {
+		l, r goast.Expr
+	}{
+		{bin.X, bin.Y},
+		{bin.Y, bin.X},
+	} {
+		summ := parseSummArray(v.r)
+		if len(summ) < 2 {
+			continue
+		}
+
+		var result goast.Expr
+		for i := range summ {
+			if i == 0 {
+				result = &goast.BinaryExpr{
+					X:  v.l,
+					Op: token.MUL,
+					Y:  summ[i].toAst(),
+				}
+			} else {
+				result = &goast.BinaryExpr{
+					X:  result,
+					Op: token.ADD,
+					Y: &goast.BinaryExpr{
+						X:  v.l,
+						Op: token.MUL,
+						Y:  summ[i].toAst(),
+					},
+				}
+			}
+		}
+		return true, result, nil
 	}
-	// if (ok1 && ok2) || (!ok1 && !ok2) {
-	// 	return false, nil, nil
-	// }
-	found := false
-	if ok2 && ispm(b2.Op) && (ok1 && !ispm(b1.Op) || !ok1) {
-		any, L, R, Op = bin.X, b2.X, b2.Y, b2.Op
-		found = true
-	}
-	if ok1 && ispm(b1.Op) && !found { // (ok2 && !ispm(b2.Op) || !ok2) {
-		any, L, R, Op = bin.Y, b1.X, b1.Y, b1.Op
-		found = true
-	}
-	if !found {
-		return false, nil, nil
-	}
-	result := &goast.BinaryExpr{
-		X: &goast.BinaryExpr{
-			X:  any,
-			Op: token.MUL,
-			Y:  L,
-		},
-		Op: Op,
-		Y: &goast.BinaryExpr{
-			X:  any,
-			Op: token.MUL,
-			Y:  R,
-		},
-	}
-	return true, result, nil
+
+	return false, nil, nil
 }
 
 func (s *sm) insideParen(a goast.Expr) (changed bool, r goast.Expr, _ error) {
@@ -2258,29 +2256,43 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 
 	// integral(...+...)
 	// integral(...)+integral(...)
-	if bin, ok := function.(*goast.BinaryExpr); ok {
-		if bin.Op == token.ADD || bin.Op == token.SUB {
-			return true, &goast.BinaryExpr{
-				X: &goast.CallExpr{
-					Fun: goast.NewIdent(integralName),
-					Args: []goast.Expr{
-						bin.X,
-						variable,
-						begin,
-						finish,
-					},
-				},
-				Op: bin.Op,
-				Y: &goast.CallExpr{
-					Fun: goast.NewIdent(integralName),
-					Args: []goast.Expr{
-						bin.Y,
-						variable,
-						begin,
-						finish,
-					},
-				},
-			}, nil
+	if summ := parseSummArray(function); 1 < len(summ) {
+		prepare := func(s string) string {
+			return strings.Replace(s, " ", "", -1)
+		}
+		start := prepare(AstToStr(function))
+		var result goast.Expr
+		for i := range summ {
+			copy := s.copy()
+			copy.base = AstToStr(&goast.CallExpr{
+				Fun: goast.NewIdent(integralName),
+				Args: []goast.Expr{
+					summ[i].value,
+					variable,
+					begin,
+					finish,
+				}})
+			out, err := copy.run()
+			s.iter += copy.iter
+			if err != nil {
+				return true, nil, err
+			}
+			if summ[i].isNegative {
+				out = "(-(" + out + "))"
+			}
+			if i == 0 {
+				result = goast.NewIdent(out)
+			} else {
+				result = &goast.BinaryExpr{
+					X:  result,
+					Op: token.ADD,
+					Y:  goast.NewIdent(out),
+				}
+			}
+		}
+		finish := prepare(AstToStr(result))
+		if start != finish {
+			return true, result, nil
 		}
 	}
 
@@ -2348,134 +2360,70 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 		return false
 	}
 
-	if bin, ok := function.(*goast.BinaryExpr); ok && bin.Op == token.MUL {
-		// from:
-		// integral(a * ...)
-		// to:
-		// a*integral(...)
-		x, y := bin.X, bin.Y
-		for i := 0; i < 2; i++ {
-			if ok := possibleExtract(x); ok {
-				return true, &goast.BinaryExpr{
-					X:  x,
-					Op: token.MUL,
-					Y: &goast.CallExpr{
-						Fun: goast.NewIdent(integralName),
-						Args: []goast.Expr{
-							y,
-							variable, begin, finish,
-						},
-					},
-				}, nil
-			}
-			x, y = y, x // swap
-		}
-	}
+	// from:
+	// integral(a * ...)
+	// to:
+	// a*integral(...)
+	if up, do, ok := parseQuoArray(function); ok {
+		var (
+			coeff      goast.Expr = goast.NewIdent("1.000")
+			addedCoeff bool       = false
+		)
 
-	if up, ok := parseMulArray(function); ok {
-		for i := range up {
+		for i := 0; i < len(up); i++ {
 			if !possibleExtract(up[i]) {
 				continue
 			}
-			value := up[i]
-			up = append(up[:i], up[i+1:]...)
-			if 0 < len(up) {
-				return true, &goast.BinaryExpr{
-					X:  value,
-					Op: token.MUL,
-					Y: &goast.CallExpr{
-						Fun: goast.NewIdent(integralName),
-						Args: []goast.Expr{
-							up.toAst(),
-							variable, begin, finish,
-						},
-					},
-				}, nil
-			}
-			return true, &goast.BinaryExpr{
-				X:  value,
+			addedCoeff = true
+			coeff = &goast.BinaryExpr{
+				X:  coeff,
 				Op: token.MUL,
-				Y: &goast.BinaryExpr{
-					X:  finish,
-					Op: token.SUB,
-					Y:  begin,
-				},
-			}, nil
+				Y:  up[i],
+			}
+			up = append(up[:i], up[i+1:]...)
+			i--
 		}
-	}
-
-	// 	if up, do, ok := parseQuoArray(function); ok {
-	// 		swap := func(left, right goast.Expr) (r bool) {
-	// 			if ok, _ := isNumber(left); ok {
-	// 				return
-	// 			}
-	// 			if _, ok := left.(*goast.BinaryExpr); ok {
-	// 				return
-	// 			}
-	// 			if isTranspose(left) {
-	// 				return
-	// 			}
-	// 			if _, ok := isMatrix(left); ok {
-	// 				return
-	// 			}
-	// 			if ok, _ := isNumber(right); ok {
-	// 				return
-	// 			}
-	// 			if _, ok := right.(*goast.BinaryExpr); ok {
-	// 				return
-	// 			}
-	// 			if isTranspose(right) {
-	// 				return
-	// 			}
-	// 			if _, ok := isMatrix(right); ok {
-	// 				return
-	// 			}
-	// 			return AstToStr(left) > AstToStr(right)
-	// 		}
-	// 		for i := range up {
-	// 			for j := range up {
-	// 				if i <= j {
-	// 					if swap(up[i], up[j]) {
-	// 						up[i], up[j] = up[j], up[i]
-	// 						return true, &goast.BinaryExpr{
-	// 							X:  up.toAst(),
-	// 							Op: token.QUO,
-	// 							Y:  do.toAst(),
-	// 						}, nil
-	// 					}
-	// 				}
-	// 			}
-	// 		}
-	// 		for i := range do {
-	// 			for j := range do {
-	// 				if i <= j {
-	// 					if swap(do[i], do[j]) {
-	// 						do[i], do[j] = do[j], do[i]
-	// 						return true, &goast.BinaryExpr{
-	// 							X:  up.toAst(),
-	// 							Op: token.QUO,
-	// 							Y:  do.toAst(),
-	// 						}, nil
-	// 					}
-	// 				}
-	// 			}
-	// 		}
-	// 	}
-
-	if up, do, ok := parseQuoArray(function); ok {
-		for i := range do {
+		for i := 0; i < len(do); i++ {
 			if !possibleExtract(do[i]) {
 				continue
 			}
-			value := &goast.BinaryExpr{
-				X:  CreateFloat(1),
-				Op: token.QUO,
-				Y:  do[i],
+			addedCoeff = true
+			coeff = &goast.BinaryExpr{
+				X:  coeff,
+				Op: token.MUL,
+				Y: &goast.BinaryExpr{
+					X:  CreateFloat(1),
+					Op: token.QUO,
+					Y:  do[i],
+				},
 			}
 			do = append(do[:i], do[i+1:]...)
+			i--
+		}
+		if addedCoeff {
+			if len(up) == 0 && len(do) == 0 {
+				return true, coeff, nil
+			}
+			if len(up) == 0 {
+				return true, &goast.BinaryExpr{
+					X:  coeff,
+					Op: token.MUL,
+					Y: &goast.CallExpr{
+						Fun: goast.NewIdent(integralName),
+						Args: []goast.Expr{
+							&goast.BinaryExpr{
+								X:  CreateFloat(1),
+								Op: token.QUO,
+								Y:  do.toAst(),
+							},
+							variable, begin, finish,
+						},
+					},
+				}, nil
+			}
 			if len(do) == 0 {
 				return true, &goast.BinaryExpr{
-					X:  value,
+					X:  coeff,
 					Op: token.MUL,
 					Y: &goast.CallExpr{
 						Fun: goast.NewIdent(integralName),
@@ -2487,7 +2435,7 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 				}, nil
 			}
 			return true, &goast.BinaryExpr{
-				X:  value,
+				X:  coeff,
 				Op: token.MUL,
 				Y: &goast.CallExpr{
 					Fun: goast.NewIdent(integralName),
@@ -3036,6 +2984,29 @@ func debug(e goast.Expr) {
 type multiplySlice []goast.Expr
 
 func parseMulArray(e goast.Expr) (ma multiplySlice, ok bool) {
+	defer func() {
+		if !ok || len(ma) < 2 {
+			return
+		}
+		for i := 0; i < len(ma); i++ {
+			ok, n := isNumber(ma[i])
+			if !ok {
+				continue
+			}
+			// from : 0 * a * b * ...
+			// to   : 0
+			if n == 0.0 {
+				ma = []goast.Expr{CreateFloat(0.0)}
+				break
+			}
+			// from : a * 1 * b
+			// to   : a * b
+			if n == 1.0 {
+				ma = append(ma[:i], ma[i+1:]...)
+				i--
+			}
+		}
+	}()
 	if par, ok := e.(*goast.ParenExpr); ok {
 		return parseMulArray(par.X)
 	}

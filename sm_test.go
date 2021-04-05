@@ -375,11 +375,11 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "integral(((sin(q))-(sin(q))*s)/r, s, 0.000, 1.000); constant(q); constant(r); variable(s)",
-			out:  "sin(q)/r-0.500*sin(q)/r",
+			out:  "sin(q)/r-0.500*(sin(q)/r)",
 		},
 		{
 			expr: "integral((v*(-1.000/L)+(1.000-s)*sin(q)/r)*(1.000/L), s, 0.000, 1.000); constant(L); constant(q); constant(r);constant(v);",
-			out:  "-1.000*(v/(L*L)) + (sin(q)/(L*r) - 0.500*sin(q)/(L*r))",
+			out:  "-1.000*v/(L*L) + sin(q)/(L*r) - 0.500*(sin(q)/(L*r))",
 		},
 		{
 			expr: `integral(transpose(matrix(a*s,1,1))*matrix(b*s,1,1)*matrix(c*s,1,1),s, 1, 2);variable(s);constant(a);constant(b);constant(c)`,
@@ -395,15 +395,15 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "integral(1.000/L*(-1.000/L)+v*(1.000/L*((sin(q)-sin(q)*s)/r)), s, 0.000, 1.000);constant(L,v,a,q,r); variable(s)",
-			out:  "-1.000/(L*L)+(v*(sin(q)/(L*r))-0.500*(v*sin(q))/(L*r))",
+			out:  "-1.000/(L*L)+v*(sin(q)/(L*r))-0.500*(v*(sin(q)/(L*r)))",
 		},
 		{
 			expr: "integral((sin(q)-sin(q)*s)/r*(1.000/L), s, 0.000, 1.000); constant(q,r,L)",
-			out:  "sin(q)/(L*r)-0.500*sin(q)/(L*r)",
+			out:  "sin(q)/(L*r)-0.500*(sin(q)/(L*r))",
 		},
 		{
 			expr: "integral(s*sin(q)/r, s, 0.000, 1.000); constant(q,r)",
-			out:  "0.500*sin(q)/r",
+			out:  "0.500*(sin(q)/r)",
 		},
 		{
 			expr: "integral(sin(q)/r, s, 0.000, 1.000); constant(q,r)",
@@ -547,11 +547,23 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "matrix(1,2,1,4,2,2)-matrix(3,4,5,6,2,2)",
-			out: "matrix(-2.000,-2.000,-4.000,-2.000,2.000,2.000)",
+			out:  "matrix(-2.000,-2.000,-4.000,-2.000,2.000,2.000)",
 		},
 		{
 			expr: "d(-(6.00000*x/(l*l)), x); variable(x); constant(l);",
-			out: "-(6.000 / (l * l))",
+			out:  "-(6.000 / (l * l))",
+		},
+		{
+			expr: "integral(pow(0.5*pow(q1*x+q2*x/L+q3*x*x/L/L,2),2),x,0,L);constant(q1,q2,q3,L);variable(x);",
+			out:  "0.050*(q1*(q1*(q1*(q1*(L*(L*(L*(L*L))))))))+q1*(q1*(q1*(q2*(L*(L*(L*L))))))/5.000+L*(L*(L*(L*(q1*(q1*(q1*q3))))))/6.000+0.300*(L*(L*(L*(q1*(q1*(q2*q2))))))+0.499*(L*(L*(L*(q1*(q1*(q2*q3))))))+0.214*(L*(L*(L*(q1*(q1*(q3*q3))))))+L*(L*(q1*(q2*(q2*q2))))/5.000+0.333*(L*(L*(q1*(q2*(q2*q3)))))+L*(L*(q1*(q2*(q3*q3))))/7.000+L*(L*(q1*(q3*(q2*q2))))/6.000+0.286*(L*(L*(q1*(q3*(q2*q3)))))+L*(L*(q1*(q3*(q3*q3))))/8.000+0.050*(L*(q2*(q2*(q2*q2))))+0.084*(L*(q2*(q2*(q2*q3))))+0.036*(L*(q2*(q2*(q3*q3))))+0.042*(L*(q2*(q3*(q2*q2))))+0.072*(L*(q2*(q3*(q2*q3))))+0.031*(L*(q2*(q3*(q3*q3))))+0.042*(L*(q3*(q2*(q2*q2))))+0.072*(L*(q3*(q2*(q2*q3))))+0.031*(L*(q3*(q2*(q3*q3))))+0.036*(L*(q3*(q3*(q2*q2))))+0.062*(L*(q3*(q3*(q2*q3))))+0.028*(L*(q3*(q3*(q3*q3))))",
+		},
+		{
+			expr: "a*(b+c)",
+			out:  "a*b+a*c",
+		},
+		{
+			expr: "(b+c)*a",
+			out:  "a*b+a*c",
 		},
 	}
 
