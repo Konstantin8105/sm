@@ -10,6 +10,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 
 	goast "go/ast"
 
@@ -1999,18 +2000,32 @@ func (s *sm) summOfParts(ps []goast.Expr) (r goast.Expr, _ error) {
 
 	if 3 < len(ps) {
 		middle := len(ps) / 2
-		r1, err := s.summOfParts(ps[:middle])
-		if err != nil {
-			return nil, err
+		var rs [2]goast.Expr
+		var errs [2]error
+		var wg sync.WaitGroup
+		wg.Add(2)
+		for _,v := range []struct{index int; ps[]goast.Expr}{
+			{0, ps[:middle]},
+			{1, ps[middle:]},
+		}{
+			index := v.index
+			ps := v.ps
+			go func(i int, ps []goast.Expr) {
+				rs[i], errs[i] = s.summOfParts(ps)
+				wg.Done()
+			}(index, ps)
 		}
-		r2, err := s.summOfParts(ps[middle:])
-		if err != nil {
-			return nil, err
+		wg.Wait()
+		if errs[0] != nil{
+			return nil, errs[0]
+		}
+		if errs[1] != nil{
+			return nil, errs[0]
 		}
 		return &goast.BinaryExpr{
-			X:  r1,
+			X:  rs[0],
 			Op: token.ADD,
-			Y:  r2,
+			Y:  rs[1],
 		}, nil
 	}
 
