@@ -1924,6 +1924,28 @@ func (s *sm) openParenRight(a goast.Expr) (changed bool, r goast.Expr, _ error) 
 		return false, nil, nil
 	}
 
+	{
+		left := parseSummArray(bin.X)
+		right := parseSummArray(bin.Y)
+		if 1 < len(left) && 1 < len(right) {
+			var results []goast.Expr
+			for i := range left {
+				for j := range right {
+					results = append(results, &goast.BinaryExpr{
+						X:  left[i].toAst(),
+						Op: token.MUL,
+						Y:  right[j].toAst(),
+					})
+				}
+			}
+			r, err := s.summOfParts(results)
+			if err != nil {
+				return false, nil, err
+			}
+			return true, r, err
+		}
+	}
+
 	// from:
 	// any * (... -+ ... -+ ...)
 	// to:
@@ -1976,7 +1998,7 @@ func (s *sm) summOfParts(ps []goast.Expr) (r goast.Expr, _ error) {
 	}
 
 	if 3 < len(ps) {
-		middle := len(ps)/2
+		middle := len(ps) / 2
 		r1, err := s.summOfParts(ps[:middle])
 		if err != nil {
 			return nil, err
@@ -1986,9 +2008,9 @@ func (s *sm) summOfParts(ps []goast.Expr) (r goast.Expr, _ error) {
 			return nil, err
 		}
 		return &goast.BinaryExpr{
-			X: r1,
+			X:  r1,
 			Op: token.ADD,
-			Y: r2,
+			Y:  r2,
 		}, nil
 	}
 
