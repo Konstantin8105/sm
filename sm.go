@@ -1178,7 +1178,6 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 			}
 		}
 	}
-
 	if ma, ok := parseMulArray(a); ok {
 		for i := 1; i < len(ma); i++ {
 			bef, bok := ma[i-1].(*goast.BinaryExpr)
@@ -1500,24 +1499,6 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	ok2, v2 := isNumber(num2)
 	if !(ok1 && ok2) {
 		return false, nil, nil
-	}
-	//
-	// from:
-	// number1 * (number2 / ...)
-	// to:
-	// (number1 * number2) / (...)
-	//
-	// from:
-	// number1 * (number2 * ...)
-	// to:
-	// (number1 * number2) * (...)
-	//
-	if bin.Op == token.MUL && (leftBin.Op == token.QUO || leftBin.Op == token.MUL) {
-		return true, &goast.BinaryExpr{
-			X:  CreateFloat(v1 * v2),
-			Op: leftBin.Op,
-			Y:  leftBin.Y,
-		}, nil
 	}
 
 	if bin.Op != token.ADD && bin.Op != token.SUB {
@@ -1986,16 +1967,18 @@ func (s *sm) openParenRight(a goast.Expr) (changed bool, r goast.Expr, _ error) 
 					Y:  goast.NewIdent(out),
 				}
 			}
+
+			copy = s.copy()
+			copy.base = AstToStr(result)
+			out, err = copy.run()
+			s.iter += copy.iter
+			if err != nil {
+				return true, nil, err
+			}
+			result = goast.NewIdent(out)
 		}
 
-		copy := s.copy()
-		copy.base = AstToStr(result)
-		out, err := copy.run()
-		s.iter += copy.iter
-		if err != nil {
-			return true, nil, err
-		}
-		return true, goast.NewIdent(out), nil
+		return true,result, nil
 	}
 
 	return false, nil, nil
