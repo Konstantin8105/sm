@@ -1998,16 +1998,19 @@ func (s *sm) summOfParts(ps []goast.Expr) (r goast.Expr, _ error) {
 		return goast.NewIdent(out), err
 	}
 
-	if 3 < len(ps) {
+	if 2 < len(ps) {
 		middle := len(ps) / 2
 		var rs [2]goast.Expr
 		var errs [2]error
 		var wg sync.WaitGroup
 		wg.Add(2)
-		for _,v := range []struct{index int; ps[]goast.Expr}{
+		for _, v := range []struct {
+			index int
+			ps    []goast.Expr
+		}{
 			{0, ps[:middle]},
 			{1, ps[middle:]},
-		}{
+		} {
 			index := v.index
 			ps := v.ps
 			go func(i int, ps []goast.Expr) {
@@ -2016,17 +2019,13 @@ func (s *sm) summOfParts(ps []goast.Expr) (r goast.Expr, _ error) {
 			}(index, ps)
 		}
 		wg.Wait()
-		if errs[0] != nil{
+		if errs[0] != nil {
 			return nil, errs[0]
 		}
-		if errs[1] != nil{
+		if errs[1] != nil {
 			return nil, errs[0]
 		}
-		return &goast.BinaryExpr{
-			X:  rs[0],
-			Op: token.ADD,
-			Y:  rs[1],
-		}, nil
+		return s.summOfParts([]goast.Expr{rs[0], rs[1]})
 	}
 
 	// TODO: parallel
