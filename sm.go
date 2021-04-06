@@ -1948,40 +1948,77 @@ func (s *sm) openParenRight(a goast.Expr) (changed bool, r goast.Expr, _ error) 
 			})
 		}
 
-		var result goast.Expr
-		for i := range results {
-			copy := s.copy()
-			copy.base = AstToStr(results[i])
-			out, err := copy.run()
-			s.iter += copy.iter
-			if err != nil {
-				return true, nil, err
-			}
-
-			if i == 0 {
-				result = goast.NewIdent(out)
-			} else {
-				result = &goast.BinaryExpr{
-					X:  result,
-					Op: token.ADD,
-					Y:  goast.NewIdent(out),
-				}
-			}
-
-			copy = s.copy()
-			copy.base = AstToStr(result)
-			out, err = copy.run()
-			s.iter += copy.iter
-			if err != nil {
-				return true, nil, err
-			}
-			result = goast.NewIdent(out)
+		r, err := s.summOfParts(results)
+		if err != nil {
+			return false, nil, err
 		}
-
-		return true,result, nil
+		return true, r, err
 	}
 
 	return false, nil, nil
+}
+
+func (s *sm) summOfParts(ps []goast.Expr) (r goast.Expr, _ error) {
+	parse := func(p goast.Expr) (string, error) {
+		copy := s.copy()
+		copy.base = AstToStr(p)
+		out, err := copy.run()
+		s.iter += copy.iter
+		if err != nil {
+			return "", err
+		}
+		return out, err
+	}
+
+	if len(ps) == 1 {
+		out, err := parse(ps[0])
+		return goast.NewIdent(out), err
+	}
+
+	if 3 < len(ps) {
+		middle := len(ps)/2
+		r1, err := s.summOfParts(ps[:middle])
+		if err != nil {
+			return nil, err
+		}
+		r2, err := s.summOfParts(ps[middle:])
+		if err != nil {
+			return nil, err
+		}
+		return &goast.BinaryExpr{
+			X: r1,
+			Op: token.ADD,
+			Y: r2,
+		}, nil
+	}
+
+	// TODO: parallel
+
+	var result goast.Expr
+	for i := range ps {
+		out, err := parse(ps[i])
+		if err != nil {
+			return nil, err
+		}
+
+		if i == 0 {
+			result = goast.NewIdent(out)
+		} else {
+			result = &goast.BinaryExpr{
+				X:  result,
+				Op: token.ADD,
+				Y:  goast.NewIdent(out),
+			}
+		}
+
+		out, err = parse(result)
+		if err != nil {
+			return nil, err
+		}
+
+		result = goast.NewIdent(out)
+	}
+	return result, nil
 }
 
 func (s *sm) insideParen(a goast.Expr) (changed bool, r goast.Expr, _ error) {
