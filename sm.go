@@ -484,12 +484,10 @@ func (s *sm) walk(a goast.Expr) (c bool, result goast.Expr, _ error) {
 	{
 		for numRule, rule := range []func(goast.Expr) (bool, goast.Expr, error){
 			s.constants,
-			s.constantsLeft,
-			s.constantsLeftLeft,
 			s.openParenLeft,
 			s.openParenRight,
 			s.insideParen,
-			s.sortIdentMul,
+			s.sort,
 			s.functionPow,
 			s.oneMul,
 			s.divide,
@@ -2167,70 +2165,6 @@ func (s *sm) zeroValueMul(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 	return false, nil, nil
 }
 
-func (s *sm) constantsLeft(a goast.Expr) (changed bool, r goast.Expr, _ error) {
-	v, ok := a.(*goast.BinaryExpr)
-	if !ok {
-		return false, nil, nil
-	}
-	// any + constants
-	xOk, _ := isNumber(v.X)
-	yOk, _ := isNumber(v.Y)
-	if !(!xOk && yOk) {
-		return false, nil, nil
-	}
-
-	switch v.Op {
-	case token.ADD, token.MUL: // + , *
-	default:
-		return false, nil, nil
-	}
-
-	// swap
-	v.X, v.Y = v.Y, v.X
-	return true, v, nil
-}
-
-func (s *sm) constantsLeftLeft(a goast.Expr) (changed bool, r goast.Expr, _ error) {
-	v, ok := a.(*goast.BinaryExpr)
-	if !ok {
-		return false, nil, nil
-	}
-	if v.Op != token.MUL {
-		return false, nil, nil
-	}
-	bin, ok := v.Y.(*goast.BinaryExpr)
-	if !ok {
-		return false, nil, nil
-	}
-	if bin.Op != token.MUL {
-		return false, nil, nil
-	}
-
-	con, _ := isNumber(bin.X)
-	if !con {
-		return false, nil, nil
-	}
-
-	con2, _ := isNumber(v.X)
-	if con2 {
-		return false, nil, nil
-	}
-
-	// from:
-	// any1 * ( constants * any2)
-	// to:
-	// constants * (any1 * any2)
-	return true, &goast.BinaryExpr{
-		X:  bin.X,
-		Op: token.MUL,
-		Y: &goast.BinaryExpr{
-			X:  v.X,
-			Op: token.MUL,
-			Y:  bin.Y,
-		},
-	}, nil
-}
-
 func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 	call, ok := e.(*goast.CallExpr)
 	if !ok {
@@ -2580,206 +2514,109 @@ func (s *sm) mulConstToMatrix(a goast.Expr) (changed bool, r goast.Expr, _ error
 	return false, nil, nil
 }
 
-func (s *sm) swap(left, right goast.Expr) bool {
-	// sort priority
-	//	constant
-	//	function
-	//	matrix
-	for _, fb := range []func() bool{
-		func() (b bool) {
-			if ok, _ := isNumber(left); ok {
-				return
+func (s *sm) sort(a goast.Expr) (changed bool, r goast.Expr, _ error) {
+	if ma, ok := parseMulArray(a); ok && 1 < len(ma) {
+		firstNumber, _ := isNumber(ma[0])
+		var numbers float64 = 1
+		amount := 0
+		for i := 0; i < len(ma); i++ {
+			if ok, n := isNumber(ma[i]); ok {
+				numbers *= n
+				if len(ma) == 1 && i == 0 {
+					return true, CreateFloat(numbers), nil
+				}
+				ma = append(ma[:i], ma[i+1:]...)
+				i--
+				amount++
 			}
-			if ok, _ := isNumber(right); !ok {
-				return
+		}
+		var result goast.Expr = ma.toAst()
+		if numbers != 1.0 {
+			result = &goast.BinaryExpr{
+				X:  CreateFloat(numbers),
+				Op: token.MUL,
+				Y:  result,
 			}
-			return
-		},
-		func() (b bool) {
-			x, ok := left.(*goast.Ident)
-			if !ok {
-				return
-			}
-			y, ok := right.(*goast.Ident)
-			if !ok {
-				return
-			}
-			if !s.isConstant(x) {
-				return
-			}
-			if !s.isConstant(y) {
-				return
-			}
-			if 0 < strings.Compare(x.Name, y.Name) {
-				b = true
-			}
-			return
-		},
-		func() (b bool) {
-			if _, ok := isMatrix(left); !ok {
-				return
-			}
-			if _, ok := right.(*goast.Ident); !ok {
-				return
-			}
-			return true
-		},
-		func() (b bool) {
-			// (s * L); constant(L);
-			if ok, _ := isNumber(left); ok {
-				return
-			}
-			if ok := s.isConstant(left); ok {
-				return
-			}
-			if _, ok := left.(*goast.Ident); !ok {
-				return
-			}
+		}
 
-			if ok, _ := isNumber(right); !(ok || s.isConstant(right)) {
-				return
-			}
-			return true
-		},
-		func() (b bool) {
-			// (s * 1/L); constant(L);
-			if ok, _ := isNumber(left); ok {
-				return
-			}
-			if ok := s.isConstant(left); ok {
-				return
-			}
-			if _, ok := left.(*goast.Ident); !ok {
-				return
-			}
-
-			bin, ok := right.(*goast.BinaryExpr)
-			if !ok {
-				return
-			}
-			if bin.Op != token.QUO {
-				return
-			}
-
-			if ok, _ := isNumber(bin.X); !(ok || s.isConstant(bin.X)) {
-				return
-			}
-			if !s.isConstant(bin.Y) {
-				return
-			}
-
-			return true
-		},
-		func() (b bool) {
-			// s * (number/L * ...); constant(L)
-			if ok, _ := isNumber(left); ok {
-				return
-			}
-			if ok := s.isConstant(left); ok {
-				return
-			}
-			if _, ok := left.(*goast.Ident); !ok {
-				return
-			}
-
-			rbin, ok := right.(*goast.BinaryExpr)
-			if !ok {
-				return
-			}
-			if rbin.Op != token.MUL {
-				return
-			}
-
-			bin, ok := rbin.X.(*goast.BinaryExpr)
-			if !ok {
-				return
-			}
-			if bin.Op != token.QUO {
-				return
-			}
-
-			if ok, _ := isNumber(bin.X); !(ok || s.isConstant(bin.X)) {
-				return
-			}
-			if !s.isConstant(bin.Y) {
-				return
-			}
-
-			return true
-		},
-	} {
-		if fb() {
-			return true
+		if 2 < amount {
+			changed = true
+		}
+		if !firstNumber && 1 == amount {
+			changed = true
+		}
+		if changed {
+			return true, result, nil
 		}
 	}
-	return false
-}
 
-func (s *sm) sortIdentMul(a goast.Expr) (changed bool, r goast.Expr, _ error) {
-	main, ok := a.(*goast.BinaryExpr)
-	if !ok {
-		return false, nil, nil
-	}
-	if main.Op != token.MUL {
-		return false, nil, nil
-	}
-
-	if s.swap(main.X, main.Y) {
-		// from :
-		// (b*a)
-		// to :
-		// (a*b)
-		return true, &goast.BinaryExpr{
-			X:  main.Y,
-			Op: token.MUL,
-			Y:  main.X,
-		}, nil
-	}
-
-	fok := func(e goast.Expr) bool {
-		if ok, _ := isNumber(e); ok {
-			return true
-		}
-		if ok := s.isConstant(e); ok {
-			return true
-		}
-		return false
-	}
-
-	if ma, ok := parseMulArray(a); ok {
+	if ma, ok := parseMulArray(a); ok && 1 < len(ma) {
+		amount := 0
+	again:
 		for i := 1; i < len(ma); i++ {
-			if ok, _ = isNumber(ma[i-1]); ok {
+			if ok, _ := isNumber(ma[i-1]); ok {
 				continue
 			}
-			if bin, ok := ma[i-1].(*goast.BinaryExpr); ok && bin.Op == token.QUO {
-				continue
+			if !s.isConstant(ma[i-1]) && s.isConstant(ma[i]) {
+				ma[i-1], ma[i] = ma[i], ma[i-1]
+				amount++
+				goto again
 			}
-			if ok, _ = isNumber(ma[i]); !ok {
-				continue
+			if s.isConstant(ma[i-1]) && s.isConstant(ma[i]) {
+				if AstToStr(ma[i-1]) > AstToStr(ma[i]) {
+					ma[i-1], ma[i] = ma[i], ma[i-1]
+					amount++
+					goto again
+				}
 			}
-			// swap
-			ma[i-1], ma[i] = ma[i], ma[i-1]
+		}
+		if 0 < amount {
 			return true, ma.toAst(), nil
 		}
 	}
 
-	// from:
-	// x*(a*(...))
-	// to:
-	// a*(x*(...))
-	if !fok(main.X) {
-		if right, ok := main.Y.(*goast.BinaryExpr); ok && right.Op == token.MUL {
-			if fok(right.X) {
-				main.X, right.X = right.X, main.X
-				return true, main, nil
+	if summ := parseSummArray(a); 1 < len(summ) {
+		for i := 1; i < len(summ); i++ {
+			if ok, _ := isNumber(summ[i].value); ok {
+				summ[0], summ[i] = summ[i], summ[0] // swap
+				return true, summ.toAst(), nil
 			}
 		}
 	}
-
 	return false, nil, nil
 }
 
 func (s *sm) constants(a goast.Expr) (changed bool, r goast.Expr, _ error) {
+	if summ := parseSummArray(a); 1 < len(summ) {
+		var numbers float64 = 0.0
+		amount := 0
+	again:
+		for i := 0; i < len(summ); i++ {
+			ok, n := isNumber(summ[i].value)
+			if !ok {
+				continue
+			}
+			if summ[i].isNegative {
+				numbers -= n
+			} else {
+				numbers += n
+			}
+			if len(summ) == 1 {
+				return true, CreateFloat(numbers), nil
+			}
+			summ = append(summ[:i], summ[i+1:]...)
+			amount++
+			goto again
+		}
+		if 1 < amount {
+			return true, &goast.BinaryExpr{
+				X:  CreateFloat(numbers),
+				Op: token.ADD,
+				Y:  summ.toAst(),
+			}, nil
+		}
+	}
+
 	v, ok := a.(*goast.BinaryExpr)
 	if !ok {
 		return false, nil, nil

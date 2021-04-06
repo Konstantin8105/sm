@@ -58,11 +58,11 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "(a + b) * (c - d); constant(a,b,c,d)",
-			out:  "a*c - a*d + (b*c - b*d)",
+			out:  "a*c+b*c-a*d-b*d",
 		},
 		{
 			expr: "(a + b) * (c - d - s); constant(a,b,c,d,s)",
-			out:  "a*c - a*d - a*s + (b*c - b*d - b*s)",
+			out:  "a*c+b*c-a*d-b*d-a*s-b*s",
 		},
 		{
 			expr: "b*(2+3-1+8*a); constant(a,b)",
@@ -131,7 +131,7 @@ func Test(t *testing.T) {
 		// differential
 		{
 			expr: "d(pow(x,a),x);constant(a);variable(x);",
-			out:  "a*pow(x,a - 1.000)",
+			out:  "a*pow(x,-1.000+a)",
 		},
 		{
 			expr: "d(pow(x,2),x);variable(x);",
@@ -163,7 +163,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "d(2*pow(x,a),x);constant(a);variable(x);",
-			out:  "2.000*(a*pow(x,a - 1.000))",
+			out:  "2.000*(a*pow(x,-1.000+a))",
 		},
 		// TODO:
 		// {
@@ -395,7 +395,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "integral(1.000/L*(-1.000/L)+v*(1.000/L*((sin(q)-sin(q)*s)/r)), s, 0.000, 1.000);constant(L,v,a,q,r); variable(s)",
-			out:  "-1.000/(L*L)+v*(sin(q)/(L*r))-0.500*(v*(sin(q)/(L*r)))",
+			out:  "-1.000/(L*L)+v*sin(q)/(L*r)-0.500*(v*sin(q)/(L*r))",
 		},
 		{
 			expr: "integral((sin(q)-sin(q)*s)/r*(1.000/L), s, 0.000, 1.000); constant(q,r,L)",
@@ -439,7 +439,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: `inverse(matrix( 1,l,0, l,0,1, l,1,0, 3,3)); constant(l);`,
-			out:  "matrix(-1.000/(-1.000+l*l),0.000,l/(-1.000+l*l),l/(-1.000+l*l),0.000,-1.000/(-1.000+l*l),l/(-1.000+l*l),1.000,-(l*l)/(-1.000+l*l),3.000,3.000)",
+			out:  "matrix(-1.000/(-1.000+l*l),0.000,l/(-1.000+l*l),l/(-1.000+l*l),0.000,-1.000/(-1.000+l*l),l/(-1.000+l*l),1.000,-1.000*(l*l)/(-1.000+l*l),3.000,3.000)",
 		},
 		{
 			expr: "l*(l*(1.000/l*(1.000/l*l)))",
@@ -491,7 +491,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "-5*x/y+2*x-0+0+5*y+3*x-1*y+12*x/y+0-0+0-0",
-			out:  "7.000*(x/y)+5.000*x+4.000*y",
+			out:  "5.000*x+4.000*y+7.000*(x/y)",
 		},
 		{
 			expr: "integral((4.000000*(x*x)/(l*l)+-12.000000*(x*(x*x))/(l*(l*l))+9.000000*(x*(x*(x*x)))/(l*(l*(l*l)))), x, 0.000000, l);constant(l)",
@@ -499,7 +499,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "x*((0.000000-3.000000*(l*l))/(l*(l*(l*l))))",
-			out:  "-3.000*x/(l*l)",
+			out:  "-3.000*(x/(l*l))",
 		},
 		{
 			expr: "-(36.000 * EJ / (l * (l * l))) + 47.952*EJ/(l*(l*l))",
@@ -531,7 +531,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "L*L*det(matrix(A*E/L,0,0,0,4*E*J/L+2*P*L/15,-(6*E*J/(L*L)+P/10),0,-2*(6*E*J/(L*L)+P/10),2*(12*E*J/(L*L*L)+6*P/2/L),3,3))",
-			out:  "24.000*(A*(E*(E*(J*(E*J))))/(L*(L*L)))+22.800*(A*(E*(E*(J*P)))/L)+1.992*(A*(E*(P*(E*J)))/L)+0.778*(L*(A*(E*(P*P))))",
+			out:  "22.800*(A*(E*(P*(E*J)))/L)+0.778*(L*(A*(E*(P*P))))+24.000*(A*(E*(E*(J*(E*J))))/(L*(L*L)))+1.992*(A*(E*(E*(J*P)))/L)",
 		},
 		{
 			expr: "(72.000*(A*(E*(E*(J*(E*J)))))+1.200*(L*(L*(A*(E*(E*(J*P)))))))/(A*(E*(E*(J*(L*(L*L))))))",
@@ -555,7 +555,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "integral(pow(0.5*pow(q1*x+q2*x/L+q3*x*x/L/L,2),2),x,0,L);constant(q1,q2,q3,L);variable(x);",
-			out:  "0.050*(q1*(q1*(q1*(q1*(L*(L*(L*(L*L))))))))+q1*(q1*(q1*(q2*(L*(L*(L*L))))))/5.000+L*(L*(L*(L*(q1*(q1*(q1*q3))))))/6.000+0.300*(L*(L*(L*(q1*(q1*(q2*q2))))))+0.499*(L*(L*(L*(q1*(q1*(q2*q3))))))+0.214*(L*(L*(L*(q1*(q1*(q3*q3))))))+L*(L*(q1*(q2*(q2*q2))))/5.000+0.333*(L*(L*(q1*(q2*(q2*q3)))))+L*(L*(q1*(q2*(q3*q3))))/7.000+L*(L*(q1*(q3*(q2*q2))))/6.000+0.286*(L*(L*(q1*(q3*(q2*q3)))))+L*(L*(q1*(q3*(q3*q3))))/8.000+0.050*(L*(q2*(q2*(q2*q2))))+0.084*(L*(q2*(q2*(q2*q3))))+0.036*(L*(q2*(q2*(q3*q3))))+0.042*(L*(q2*(q3*(q2*q2))))+0.072*(L*(q2*(q3*(q2*q3))))+0.031*(L*(q2*(q3*(q3*q3))))+0.042*(L*(q3*(q2*(q2*q2))))+0.072*(L*(q3*(q2*(q2*q3))))+0.031*(L*(q3*(q2*(q3*q3))))+0.036*(L*(q3*(q3*(q2*q2))))+0.062*(L*(q3*(q3*(q2*q3))))+0.028*(L*(q3*(q3*(q3*q3))))",
+			out:  "0.050*(L*(L*(L*(L*(L*(q1*(q1*(q1*q1))))))))+L*(L*(L*(L*(q1*(q1*(q1*q2))))))/5.000+L*(L*(L*(L*(q1*(q1*(q1*q3))))))/6.000+0.100*(L*(L*(L*(q1*(q1*(q2*q2))))))+0.500*(L*(L*(L*(q1*(q1*(q2*q3))))))+0.071*(L*(L*(L*(q1*(q1*(q3*q3))))))+L*(L*(L*(q1*(q1*(q2*q2)))))/5.000+L*(L*(q1*(q2*(q2*q2))))/5.000+0.333*(L*(L*(q1*(q2*(q2*q3)))))+0.429*(L*(L*(q1*(q2*(q3*q3)))))+L*(L*(L*(q1*(q1*(q3*q3)))))/7.000+L*(L*(q1*(q3*(q3*q3))))/8.000+0.050*(L*(q2*(q2*(q2*q2))))+L*(q2*(q2*(q2*q3)))/6.000+0.071*(L*(q2*(q2*(q3*q3))))+L*(L*(q1*(q2*(q2*q3))))/6.000+L*(q2*(q2*(q3*q3)))/7.000+L*(q2*(q3*(q3*q3)))/8.000+0.028*(L*(q3*(q3*(q3*q3))))",
 		},
 		{
 			expr: "a*(b+c)",
@@ -587,7 +587,7 @@ func Test(t *testing.T) {
 				t.Errorf("found: %s", "integral")
 			}
 			if act != ec {
-				t.Fatalf("Is not same '%s' != '%s'", act, tcs[i].out)
+				t.Fatalf("Is not same \nActual : '%s'\nExpect : '%s'", act, tcs[i].out)
 			}
 			if strings.Contains(act, "+-") {
 				t.Errorf("Not valid +- sign confuse")
@@ -615,56 +615,24 @@ func Example() {
 	// Output:
 	// Input : -1+(-a)+(+5)+(+2+3+1)
 	//
+	// -1.000 + -1.000*a + 5.000 + (2.000 + 3 + 1)
+	// -1.000 - -1.000*(-1.000*a) + 5.000 + (2.000 + 3 + 1)
+	// -1.000 - 1.000*a + 5.000 + (2.000 + 3 + 1)
 	// -1.000 - a + 5.000 + (2.000 + 3 + 1)
-	// 5.000 + (-1.000 - a) + (2.000 + 3 + 1)
-	// 5.000 - -1.000*-1.000 - a + (2.000 + 3 + 1)
-	// 5.000 - 1.000 - a + (2.000 + 3 + 1)
+	// 4.000 + -a + (2.000 + 3 + 1)
+	// 4.000 + -1.000*a + (2.000 + 3 + 1)
+	// 4.000 - -1.000*(-1.000*a) + (2.000 + 3 + 1)
+	// 4.000 - 1.000*a + (2.000 + 3 + 1)
 	// 4.000 - a + (2.000 + 3 + 1)
 	// 4.000 - a + (2.000 + 3.000 + 1)
 	// 4.000 - a + (5.000 + 1)
 	// 4.000 - a + (5.000 + 1.000)
 	// 4.000 - a + 6.000
-	// 6.000 + (4.000 - a)
+	// 10.000 + -a
+	// 10.000 + -1.000*a
+	// 10.000 - -1.000*(-1.000*a)
+	// 10.000 - 1.000*a
 	// 10.000 - a
 	//
 	// Output : 10.000 - a
 }
-
-// func ExampleSexpr() {
-// 	eq, err := sm.Sexpr(os.Stdout, // nil,
-// 		`integral(
-// 		transpose(matrix(
-// 			-1/L,0,0,
-// 			(1-s)*sin(q)/r, (1-3*s*s+2*s*s*s)*cos(q)/r, L*(s-2*s*s+s*s*s)*cos(q),
-// 			0, (6-12*s)/(L*L), (4-6*s)/L,
-// 			0, (6*s-6*s*s)*sin(q)/(r*L), (-1+4*s-3*s*s)*sin(q)/r,
-// 			4,3))*
-// 			matrix(
-// 				1, v, 0, 0,
-// 				v, 1, 0, 0,
-// 				0, 0, t*t/12, v*t*t/12,
-// 				0, 0, v*t*t/12, t*t/12,
-// 			4,4)
-// 			*
-// 			matrix(
-// 				1/L,0,0,
-// 				s*sin(q)/r, (3*s*s-2*s*s*s)*cos(q)/r, L*(-s*s+s*s*s)*cos(q)/r,
-// 				0, (-6+12*s)/L/L, (2-6*s)/L,
-// 				0, (-6*s+6*s*s)*sin(q)/r/L, (2*s-3*s*s)*sin(q)/r,
-// 			4,3) ,
-// 			s, 0, 1);
-// 			variable(s);
-// 			constant(q);
-// 			constant(L);
-// 			constant(v);
-// 			constant(t);
-// 			`,
-// 	)
-// 	if err != nil {
-// 		fmt.Fprintf(os.Stdout, "%v", err)
-// 		return
-// 	}
-// 	fmt.Fprintf(os.Stdout, "%s\n", eq)
-// 	fmt.Fprintf(os.Stdout, "integral = %d\n", strings.Count(eq, "integral"))
-// 	// Output:
-// }
