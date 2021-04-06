@@ -1960,21 +1960,27 @@ func (s *sm) openParenRight(a goast.Expr) (changed bool, r goast.Expr, _ error) 
 
 		var result goast.Expr
 		for i := range summ {
+			mul := &goast.BinaryExpr{
+				X:  v.l,
+				Op: token.MUL,
+				Y:  summ[i].toAst(),
+			}
+
+			copy := s.copy()
+			copy.base = AstToStr(mul)
+			out, err := copy.run()
+			s.iter += copy.iter
+			if err != nil {
+				return true, nil, err
+			}
+
 			if i == 0 {
-				result = &goast.BinaryExpr{
-					X:  v.l,
-					Op: token.MUL,
-					Y:  summ[i].toAst(),
-				}
+				result = goast.NewIdent(out)
 			} else {
 				result = &goast.BinaryExpr{
 					X:  result,
 					Op: token.ADD,
-					Y: &goast.BinaryExpr{
-						X:  v.l,
-						Op: token.MUL,
-						Y:  summ[i].toAst(),
-					},
+					Y:  goast.NewIdent(out),
 				}
 			}
 		}
