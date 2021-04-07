@@ -58,11 +58,11 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "(a + b) * (c - d); constant(a,b,c,d)",
-			out:  "a*c-a*d+b*c-b*d",
+			out:  "a*c-a*d+(b*c-b*d)",
 		},
 		{
 			expr: "(a + b) * (c - d - s); constant(a,b,c,d,s)",
-			out:  "a*c-a*d-a*s+b*c-b*d-b*s",
+			out:  "a*c-a*d-a*s+(b*c-b*d-b*s)",
 		},
 		{
 			expr: "b*(2+3-1+8*a); constant(a,b)",
@@ -531,7 +531,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "L*L*det(matrix(A*E/L,0,0,0,4*E*J/L+2*P*L/15,-(6*E*J/(L*L)+P/10),0,-2*(6*E*J/(L*L)+P/10),2*(12*E*J/(L*L*L)+6*P/2/L),3,3))",
-			out:  "1.992*(A*(E*(P*(E*J)))/L)+0.778*(L*(A*(E*(P*P))))+24.000*(A*(E*(E*(J*(E*J))))/(L*(L*L)))+22.800*(A*(E*(E*(J*P)))/L)",
+			out: "1.992*(A*(E*(P*(E*J)))/L)+0.778*(L*(A*(E*(P*P))))+(24.000*(A*(E*(E*(J*(E*J))))/(L*(L*L)))+22.800*(A*(E*(E*(J*P)))/L))",
 		},
 		{
 			expr: "(72.000*(A*(E*(E*(J*(E*J)))))+1.200*(L*(L*(A*(E*(E*(J*P)))))))/(A*(E*(E*(J*(L*(L*L))))))",

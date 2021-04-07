@@ -729,7 +729,7 @@ func (s *sm) matrixInverse(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 	if err != nil {
 		return true, nil, err
 	}
-	value = goast.NewIdent(out)
+	value = goast.NewIdent("(" + out + ")")
 
 	// prepare of matrix
 	mat := CreateMatrix(size, size)
@@ -1876,45 +1876,61 @@ func (s *sm) functionPow(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		return true, CreateFloat("1"), nil
 	}
 
-	if exn > 0 {
-		// from:
-		// pow(..., 33)
-		// to:
-		// (...) * pow(..., 32)
-		x1 := val
-		x2 := val
+	if exn == 1 {
+		// from : pow(...,1)
+		// to   : ...
+		return true, val, nil
+	}
+
+	if exn < 0 {
+		// from : pow(...,-5)
+		// to   : 1/pow(...,5)
 		return true, &goast.BinaryExpr{
-			X:  x1,
-			Op: token.MUL,
+			X:  CreateFloat(1),
+			Op: token.QUO,
 			Y: &goast.CallExpr{
 				Fun: goast.NewIdent(pow),
 				Args: []goast.Expr{
-					x2,
-					CreateFloat(fmt.Sprintf("%d", exn-1)),
+					val,
+					CreateFloat(fmt.Sprintf("%d", -exn)),
 				},
 			},
 		}, nil
 	}
 
-	// from:
-	// pow(..., -33)
-	// to:
-	// pow(..., -32) * 1.0 / (...)
-	x1 := val
-	x2 := val
-	return true, &goast.BinaryExpr{
-		X: &goast.CallExpr{
+	if exn%2 == 0 {
+		// from : pow(...,4)
+		// to   : pow(...,2)*pow(...,2)
+		copy := s.copy()
+		copy.base = AstToStr(&goast.CallExpr{
 			Fun: goast.NewIdent(pow),
 			Args: []goast.Expr{
-				x1,
-				CreateFloat(fmt.Sprintf("%d", exn+1)),
+				val,
+				CreateFloat(fmt.Sprintf("%d", exn/2)),
 			},
-		},
+		})
+		out, err := copy.run()
+		s.iter += copy.iter
+		if err != nil {
+			return false, nil, err
+		}
+		out = "(" + out + ")"
+		return true, &goast.BinaryExpr{
+			X:  goast.NewIdent(out),
+			Op: token.MUL,
+			Y:  goast.NewIdent(out),
+		}, nil
+	}
+
+	return true, &goast.BinaryExpr{
+		X:  val,
 		Op: token.MUL,
-		Y: &goast.BinaryExpr{
-			X:  CreateFloat("1"),
-			Op: token.QUO,
-			Y:  x2,
+		Y: &goast.CallExpr{
+			Fun: goast.NewIdent(pow),
+			Args: []goast.Expr{
+				val,
+				CreateFloat(fmt.Sprintf("%d", exn-1)),
+			},
 		},
 	}, nil
 }
@@ -1990,7 +2006,7 @@ func (s *sm) summOfParts(ps []goast.Expr) (r goast.Expr, _ error) {
 		if err != nil {
 			return "", err
 		}
-		return out, err
+		return "(" + out + ")", err
 	}
 
 	if len(ps) == 1 {
@@ -2027,8 +2043,6 @@ func (s *sm) summOfParts(ps []goast.Expr) (r goast.Expr, _ error) {
 		}
 		return s.summOfParts([]goast.Expr{rs[0], rs[1]})
 	}
-
-	// TODO: parallel
 
 	var result goast.Expr
 	for i := range ps {
