@@ -2695,7 +2695,10 @@ func (s *sm) constants(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 			amount++
 			goto again
 		}
-		if 1 < amount {
+		if (1 < amount) || (1 == amount && numbers == 0) {
+			if numbers == 0 {
+				return true, summ.toAst(), nil
+			}
 			return true, &goast.BinaryExpr{
 				X:  CreateFloat(numbers),
 				Op: token.ADD,

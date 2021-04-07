@@ -491,7 +491,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "-5*x/y+2*x-0+0+5*y+3*x-1*y+12*x/y+0-0+0-0",
-			out:  "5.000*x+4.000*y+7.000*(x/y)",
+			out:  "7.000*(x/y)+5.000*x+4.000*y",
 		},
 		{
 			expr: "integral((4.000000*(x*x)/(l*l)+-12.000000*(x*(x*x))/(l*(l*l))+9.000000*(x*(x*(x*x)))/(l*(l*(l*l)))), x, 0.000000, l);constant(l)",
@@ -531,7 +531,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "L*L*det(matrix(A*E/L,0,0,0,4*E*J/L+2*P*L/15,-(6*E*J/(L*L)+P/10),0,-2*(6*E*J/(L*L)+P/10),2*(12*E*J/(L*L*L)+6*P/2/L),3,3))",
-			out: "1.992*(A*(E*(P*(E*J)))/L)+0.778*(L*(A*(E*(P*P))))+(24.000*(A*(E*(E*(J*(E*J))))/(L*(L*L)))+22.800*(A*(E*(E*(J*P)))/L))",
+			out:  "24.000*(A*(E*(E*(J*(E*J))))/(L*(L*L)))+22.800*(A*(E*(E*(J*P)))/L)+(1.992*(A*(E*(P*(E*J)))/L)+0.778*(L*(A*(E*(P*P)))))",
 		},
 		{
 			expr: "(72.000*(A*(E*(E*(J*(E*J)))))+1.200*(L*(L*(A*(E*(E*(J*P)))))))/(A*(E*(E*(J*(L*(L*L))))))",
@@ -564,6 +564,18 @@ func Test(t *testing.T) {
 		{
 			expr: "(b+c)*a",
 			out:  "a*b+a*c",
+		},
+		{
+			expr: "d(matrix(EA*(q1*q4)/(2.00000*L)-EA*(q1*q1/L)/2.00000, 1.00000, 1.00000),q1)/q1;constant(L,x,EA); variable(q1);",
+			out:  "matrix(0.500*(EA*q4)/(L*q1)-EA/L,1.000,1.000)",
+		},
+		{
+			expr: "(-1.000*(L*EA) - -0.000)",
+			out:  "-1.000 * (L * EA)",
+		},
+		{
+			expr: "integral(d(matrix(-1*(EA*q4)/L+EA*q1/L, 1, 1),q4),q4,0,q4);constant(L,x); variable(q4)",
+			out:  "matrix(-1.000*(EA*q4/L), 1.000, 1.000)",
 		},
 	}
 
