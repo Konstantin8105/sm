@@ -2423,7 +2423,17 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 		}
 		if addedCoeff {
 			if len(up) == 0 && len(do) == 0 {
-				return true, coeff, nil
+				return true, &goast.BinaryExpr{
+					X:  coeff,
+					Op: token.MUL,
+					Y: &goast.CallExpr{
+						Fun: goast.NewIdent(integralName),
+						Args: []goast.Expr{
+							CreateFloat(1),
+							variable, begin, finish,
+						},
+					},
+				}, nil
 			}
 			if len(up) == 0 {
 				return true, &goast.BinaryExpr{
@@ -2474,7 +2484,7 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 	}
 
 	//
-	// D(pow(x,n+1)/(n+1), 0.000, 1.000)
+	// d(pow(x,n+1)/(n+1), 0.000, 1.000)
 	//
 	// n = 1
 	// integral(x, x, 0.000, 1.000)
