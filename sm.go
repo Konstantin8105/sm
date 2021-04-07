@@ -2278,43 +2278,23 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 	// integral(...+...)
 	// integral(...)+integral(...)
 	if summ := parseSummArray(function); 1 < len(summ) {
-		prepare := func(s string) string {
-			return strings.Replace(s, " ", "", -1)
-		}
-		start := prepare(AstToStr(function))
-		var result goast.Expr
+		var results []goast.Expr
 		for i := range summ {
-			copy := s.copy()
-			copy.base = AstToStr(&goast.CallExpr{
+			results = append(results, &goast.CallExpr{
 				Fun: goast.NewIdent(integralName),
 				Args: []goast.Expr{
-					summ[i].value,
+					summ[i].toAst(),
 					variable,
 					begin,
 					finish,
 				}})
-			out, err := copy.run()
-			s.iter += copy.iter
-			if err != nil {
-				return true, nil, err
-			}
-			if summ[i].isNegative {
-				out = "(-(" + out + "))"
-			}
-			if i == 0 {
-				result = goast.NewIdent(out)
-			} else {
-				result = &goast.BinaryExpr{
-					X:  result,
-					Op: token.ADD,
-					Y:  goast.NewIdent(out),
-				}
-			}
 		}
-		finish := prepare(AstToStr(result))
-		if start != finish {
-			return true, result, nil
+
+		r, err := s.summOfParts(results)
+		if err != nil {
+			return false, nil, err
 		}
+		return true, r, err
 	}
 
 	// integral(matrix(...),x,0,1)
