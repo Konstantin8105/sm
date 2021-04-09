@@ -1618,29 +1618,27 @@ func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		return true, mt.Ast(), nil
 	}
 
+	// d(u + v, x) = d(u,x) + d(v,x)
+	if summ := parseSummArray(call.Args[0]); 1 < len(summ) {
+		var results []goast.Expr
+		for i := range summ {
+			results = append(results, &goast.CallExpr{
+				Fun: goast.NewIdent(differential),
+				Args: []goast.Expr{
+					summ[i].toAst(),
+					goast.NewIdent(dvar),
+				}})
+		}
+
+		r, err := s.summOfParts(results)
+		if err != nil {
+			return false, nil, err
+		}
+		return true, r, err
+	}
+
 	if bin, ok := call.Args[0].(*goast.BinaryExpr); ok {
 		switch bin.Op {
-		case token.ADD, token.SUB: // + -
-			// rule:
-			// d(u + v, x) = d(u,x) + d(v,x)
-			return true, &goast.BinaryExpr{
-				X: &goast.CallExpr{
-					Fun: goast.NewIdent(differential),
-					Args: []goast.Expr{
-						bin.X,
-						goast.NewIdent(dvar),
-					},
-				},
-				Op: bin.Op,
-				Y: &goast.CallExpr{
-					Fun: goast.NewIdent(differential),
-					Args: []goast.Expr{
-						bin.Y,
-						goast.NewIdent(dvar),
-					},
-				},
-			}, nil
-
 		case token.QUO: // /
 			// rule:
 			// d(u/v,x) = (d(u,x)*v - u*d(v,x)) / (v * v)
