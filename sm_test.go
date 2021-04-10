@@ -379,7 +379,7 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "integral((v*(-1.000/L)+(1.000-s)*sin(q)/r)*(1.000/L), s, 0.000, 1.000); constant(L); constant(q); constant(r);constant(v);",
-			out:  "-1.000*v/(L*L)+(sin(q)/(L*r)-0.500*sin(q)/(L*r))",
+			out:  "-1.000*(v/(L*L))+(sin(q)/(L*r)-0.500*sin(q)/(L*r))",
 		},
 		{
 			expr: `integral(transpose(matrix(a*s,1,1))*matrix(b*s,1,1)*matrix(c*s,1,1),s, 1, 2);variable(s);constant(a);constant(b);constant(c)`,

@@ -485,7 +485,6 @@ func (s *sm) walk(a goast.Expr) (c bool, result goast.Expr, _ error) {
 	{
 		for numRule, rule := range []func(goast.Expr) (bool, goast.Expr, error){
 			s.constants,
-			// s.openParenLeft,
 			s.openParenRight,
 			s.insideParen,
 			s.sort,
@@ -493,7 +492,6 @@ func (s *sm) walk(a goast.Expr) (c bool, result goast.Expr, _ error) {
 			s.oneMul,
 			s.divide,
 			s.binaryNumber,
-			s.binaryUnary,
 			s.zeroValueMul,
 			s.differential,
 			s.divideDivide,
@@ -983,158 +981,6 @@ func (s *sm) divide(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	}, nil
 }
 
-func (s *sm) binaryUnary(a goast.Expr) (changed bool, r goast.Expr, _ error) {
-	if u1, ok := a.(*goast.UnaryExpr); ok && u1.Op == token.SUB {
-		if u2, ok := u1.X.(*goast.UnaryExpr); ok && u2.Op == token.SUB {
-			return true, u2.X, nil
-		}
-	}
-
-	bin, ok := a.(*goast.BinaryExpr)
-	if !ok {
-		return false, nil, nil
-	}
-
-	// from : (0 + ...)
-	// to   : (...)
-	if ok, n := isNumber(bin.X); ok && bin.Op == token.ADD && n == 0 {
-		return true, bin.Y, nil
-	}
-
-	// from : (0 - ...)
-	// to   : -(...)
-	if ok, n := isNumber(bin.X); ok && bin.Op == token.SUB && n == 0 {
-		return true, &goast.UnaryExpr{
-			Op: token.SUB,
-			X:  bin.Y,
-		}, nil
-	}
-
-	var unary *goast.UnaryExpr
-	found := false
-	if par, ok := bin.Y.(*goast.ParenExpr); ok {
-		if un, ok := par.X.(*goast.UnaryExpr); ok {
-			unary = un
-			found = true
-		}
-	}
-	if un, ok := bin.Y.(*goast.UnaryExpr); ok {
-		unary = un
-		found = true
-	}
-	if !found {
-		return false, nil, nil
-	}
-
-	// from:
-	// ... * (+...)
-	// to:
-	// ... * (...)
-	if bin.Op == token.MUL && unary.Op == token.ADD {
-		return true, &goast.BinaryExpr{
-			X:  bin.X,
-			Op: token.MUL,
-			Y:  unary.X,
-		}, nil
-	}
-
-	// from:
-	// ... * (-...)
-	// to:
-	// -(...) * ...
-	if bin.Op == token.MUL && unary.Op == token.SUB {
-		return true, &goast.BinaryExpr{
-			X: &goast.UnaryExpr{
-				Op: token.SUB,
-				X:  bin.X,
-			},
-			Op: token.MUL,
-			Y:  unary.X,
-		}, nil
-	}
-
-	// from:
-	// ... / (+...)
-	// to:
-	// ... / (...)
-	if bin.Op == token.QUO && unary.Op == token.ADD {
-		return true, &goast.BinaryExpr{
-			X:  bin.X,
-			Op: token.QUO,
-			Y:  unary.X,
-		}, nil
-	}
-
-	// from:
-	// ... / (-...)
-	// to:
-	// (-...) / (...)
-	if bin.Op == token.QUO && unary.Op == token.SUB {
-		return true, &goast.BinaryExpr{
-			X: &goast.UnaryExpr{
-				Op: token.SUB,
-				X:  bin.X,
-			},
-			Op: token.QUO,
-			Y:  unary.X,
-		}, nil
-	}
-
-	if bin.Op != token.ADD && bin.Op != token.SUB {
-		return false, nil, nil
-	}
-
-	// from:
-	// ... + (-...)
-	// to:
-	// ... - (...)
-	if bin.Op == token.ADD && unary.Op == token.SUB {
-		return true, &goast.BinaryExpr{
-			X:  bin.X,
-			Op: token.SUB,
-			Y:  unary.X,
-		}, nil
-	}
-
-	// from:
-	// ... - (-...)
-	// to:
-	// ... + (...)
-	if bin.Op == token.SUB && unary.Op == token.SUB {
-		return true, &goast.BinaryExpr{
-			X:  bin.X,
-			Op: token.ADD,
-			Y:  unary.X,
-		}, nil
-	}
-
-	// from:
-	// ... - (+...)
-	// to:
-	// ... - (...)
-	if bin.Op == token.SUB && unary.Op == token.ADD {
-		return true, &goast.BinaryExpr{
-			X:  bin.X,
-			Op: token.SUB,
-			Y:  unary.X,
-		}, nil
-	}
-
-	// from:
-	// ... + (+...)
-	// to:
-	// ... + (...)
-	if bin.Op == token.ADD && unary.Op == token.ADD {
-		return true, &goast.BinaryExpr{
-			X:  bin.X,
-			Op: token.ADD,
-			Y:  unary.X,
-		}, nil
-	}
-
-	return false, nil, nil
-}
-
 func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	bin, ok := a.(*goast.BinaryExpr)
 	if !ok {
@@ -1286,36 +1132,6 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	}
 
 	if up, do, ok := parseQuoArray(a); ok {
-		for i := range up {
-			if un, ok := up[i].(*goast.UnaryExpr); ok {
-				value := &goast.UnaryExpr{
-					Op: un.Op,
-					X:  CreateFloat(1),
-				}
-				up[i] = un.X
-				up = append(up, value)
-				return true, &goast.BinaryExpr{
-					X:  up.toAst(),
-					Op: token.QUO,
-					Y:  do.toAst(),
-				}, nil
-			}
-		}
-		for i := range do {
-			if un, ok := do[i].(*goast.UnaryExpr); ok {
-				value := &goast.UnaryExpr{
-					Op: un.Op,
-					X:  CreateFloat(1),
-				}
-				do[i] = un.X
-				do = append(do, value)
-				return true, &goast.BinaryExpr{
-					X:  up.toAst(),
-					Op: token.QUO,
-					Y:  do.toAst(),
-				}, nil
-			}
-		}
 		if 0 < len(up) && 0 < len(do) {
 			var num float64 = 1.0
 			counter := 0
@@ -1451,7 +1267,7 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 						valWithoutSign = un.X
 						op = un.Op
 					}
-					if AstToStr(multiplySlice(left[1:]).toAst()) ==
+					if cs[i] && !cs[j] && AstToStr(multiplySlice(left[1:]).toAst()) ==
 						AstToStr(valWithoutSign) {
 						if ok, _ := isNumber(left[0]); ok {
 							sum[i] = sliceSumm{
@@ -1509,33 +1325,43 @@ func (s *sm) oneMul(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	if !ok {
 		return false, nil, nil
 	}
-	if bin.Op != token.MUL {
-		return false, nil, nil
-	}
-	bas, ok := bin.X.(*goast.BasicLit)
-	if !ok {
-		return false, nil, nil
-	}
 
-	val, err := strconv.ParseFloat(bas.Value, 64)
-	if err != nil {
-		panic(err)
-	}
+	switch bin.Op {
+	case token.QUO:
+		// from : any / 1
+		// to   : any
+		ok, val := isNumber(bin.Y)
+		if ok {
+			if val == 1.0 {
+				return true, bin.X, nil
+			}
+			if val == 0.0 {
+				panic("cannot divide by zero")
+			}
+		}
 
-	if val != float64(int64(val)) {
-		return false, nil, nil
+	case token.MUL:
+		// from : 1 * any
+		// to   : any
+		for _, v := range []struct {
+			l, r goast.Expr
+		}{
+			{l: bin.X, r: bin.Y},
+			{l: bin.Y, r: bin.X},
+		} {
+			ok, val := isNumber(v.l)
+			if !ok {
+				continue
+			}
+			if val == 1.0 {
+				return true, v.r, nil
+			}
+			if val == 0.0 {
+				return true, CreateFloat(0), nil
+			}
+		}
 	}
-
-	exn := int64(val)
-	if exn != 1 {
-		return false, nil, nil
-	}
-
-	// from :
-	// 1 * any
-	// to:
-	// any
-	return true, bin.Y, nil
+	return false, nil, nil
 }
 
 func (s *sm) differential(a goast.Expr) (changed bool, r goast.Expr, _ error) {
@@ -2738,29 +2564,6 @@ func debug(e goast.Expr) {
 type multiplySlice []goast.Expr
 
 func parseMulArray(e goast.Expr) (ma multiplySlice, ok bool) {
-	defer func() {
-		if !ok || len(ma) < 2 {
-			return
-		}
-		for i := 0; i < len(ma); i++ {
-			ok, n := isNumber(ma[i])
-			if !ok {
-				continue
-			}
-			// from : 0 * a * b * ...
-			// to   : 0
-			if n == 0.0 {
-				ma = []goast.Expr{CreateFloat(0.0)}
-				break
-			}
-			// from : a * 1 * b
-			// to   : a * b
-			if n == 1.0 {
-				ma = append(ma[:i], ma[i+1:]...)
-				i--
-			}
-		}
-	}()
 	if par, ok := e.(*goast.ParenExpr); ok {
 		return parseMulArray(par.X)
 	}
