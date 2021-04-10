@@ -484,6 +484,7 @@ func (s *sm) walk(a goast.Expr) (c bool, result goast.Expr, _ error) {
 	// try simplification
 	{
 		for numRule, rule := range []func(goast.Expr) (bool, goast.Expr, error){
+			s.differential,
 			s.constants,
 			s.openParenRight,
 			s.insideParen,
@@ -493,7 +494,6 @@ func (s *sm) walk(a goast.Expr) (c bool, result goast.Expr, _ error) {
 			s.divide,
 			s.binaryNumber,
 			s.zeroValueMul,
-			s.differential,
 			s.divideDivide,
 			s.matrixTranspose,
 			s.matrixDet,
