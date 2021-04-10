@@ -485,7 +485,7 @@ func (s *sm) walk(a goast.Expr) (c bool, result goast.Expr, _ error) {
 	{
 		for numRule, rule := range []func(goast.Expr) (bool, goast.Expr, error){
 			s.constants,
-			s.openParenLeft,
+			// s.openParenLeft,
 			s.openParenRight,
 			s.insideParen,
 			s.sort,
@@ -1422,29 +1422,46 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 				return true, sum.toAst(), nil
 			}
 		}
+
+		ma := make([]multiplySlice, len(sum))
+		cs := make([]bool, len(sum))
+		for i := range sum {
+			ma[i], _ = parseMulArray(sum[i].toAst())
+			if 1 < len(ma[i]) {
+				if ok, _ := isNumber(ma[i][0]); ok {
+					cs[i] = true
+				}
+			}
+		}
+
 		for i := range sum {
 			for j := range sum {
-				if j <= i {
+				if !cs[i] && !cs[j] {
 					continue
 				}
-				// from : a * x + b * x
-				// to   : (a + b) * x
-				if left, ok := parseMulArray(sum[i].toAst()); ok && 1 < len(left) {
-					if right, ok := parseMulArray(sum[j].toAst()); ok && 1 < len(right) {
-						if AstToStr(multiplySlice(left[1:]).toAst()) ==
-							AstToStr(multiplySlice(right[1:]).toAst()) {
-							ok, v1 := isNumber(left[0])
-							if !ok {
-								continue
-							}
-							ok, v2 := isNumber(right[0])
-							if !ok {
-								continue
-							}
+				if i == j {
+					continue
+				}
+				// from : a * x + x
+				// to   : (a + 1) * x
+				if left := ma[i]; ok && 1 < len(left) {
+					valWithoutSign := sum[j].toAst()
+					op := token.ADD
+					if un, ok := valWithoutSign.(*goast.UnaryExpr); ok {
+						valWithoutSign = un.X
+						op = un.Op
+					}
+					if AstToStr(multiplySlice(left[1:]).toAst()) ==
+						AstToStr(valWithoutSign) {
+						if ok, _ := isNumber(left[0]); ok {
 							sum[i] = sliceSumm{
 								isNegative: false,
 								value: &goast.BinaryExpr{
-									X:  CreateFloat(v1 + v2),
+									X: &goast.BinaryExpr{
+										X:  left[0],
+										Op: op,
+										Y:  CreateFloat(1),
+									},
 									Op: token.MUL,
 									Y:  multiplySlice(left[1:]).toAst(),
 								},
@@ -1454,92 +1471,37 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 						}
 					}
 				}
-				// from : a * x + x
-				// to   : (a + 1) * x
-				if left, ok := parseMulArray(sum[i].toAst()); ok && 1 < len(left) {
-					valWithoutSign := sum[j].toAst()
-					op := token.ADD
-					if un, ok := valWithoutSign.(*goast.UnaryExpr); ok {
-						valWithoutSign = un.X
-						op = un.Op
+				if j <= i {
+					continue
+				}
+				// from : a * x + b * x
+				// to   : (a + b) * x
+				if left := ma[i]; ok && 1 < len(left) {
+					if right := ma[j]; ok && 1 < len(right) {
+						if AstToStr(multiplySlice(left[1:]).toAst()) ==
+							AstToStr(multiplySlice(right[1:]).toAst()) {
+							ok1, v1 := isNumber(left[0])
+							ok2, v2 := isNumber(right[0])
+							if ok1 && ok2 {
+								sum[i] = sliceSumm{
+									isNegative: false,
+									value: &goast.BinaryExpr{
+										X:  CreateFloat(v1 + v2),
+										Op: token.MUL,
+										Y:  multiplySlice(left[1:]).toAst(),
+									},
+								}
+								sum = append(sum[:j], sum[j+1:]...)
+								return true, sum.toAst(), nil
+							}
+						}
 					}
-					if AstToStr(multiplySlice(left[1:]).toAst()) !=
-						AstToStr(valWithoutSign) {
-						continue
-					}
-					if ok, _ := isNumber(left[0]); !ok {
-						continue
-					}
-					sum[i] = sliceSumm{
-						isNegative: false,
-						value: &goast.BinaryExpr{
-							X: &goast.BinaryExpr{
-								X:  left[0],
-								Op: op,
-								Y:  CreateFloat(1),
-							},
-							Op: token.MUL,
-							Y:  multiplySlice(left[1:]).toAst(),
-						},
-					}
-					sum = append(sum[:j], sum[j+1:]...)
-					return true, sum.toAst(), nil
 				}
 			}
 		}
 	}
 
-	leftBin, ok := bin.Y.(*goast.BinaryExpr)
-	if !ok {
-		return false, nil, nil
-	}
-
-	num1, num2 := bin.X, leftBin.X
-
-	ok1, v1 := isNumber(num1)
-	ok2, v2 := isNumber(num2)
-	if !(ok1 && ok2) {
-		return false, nil, nil
-	}
-
-	if bin.Op != token.ADD && bin.Op != token.SUB {
-		return false, nil, nil
-	}
-	if leftBin.Op != token.ADD && leftBin.Op != token.SUB {
-		return false, nil, nil
-	}
-
-	// from:
-	// number1 + (number2 +- ...)
-	// to:
-	// (number1 + number2) +- (...)
-	if bin.Op == token.ADD {
-		return true, &goast.BinaryExpr{
-			X:  CreateFloat(v1 + v2),
-			Op: leftBin.Op,
-			Y:  leftBin.Y,
-		}, nil
-	}
-	// from:
-	// number1 - (number2 + ...)
-	// to:
-	// (number1 - number2) - (...)
-	if bin.Op == token.SUB && leftBin.Op == token.ADD {
-		return true, &goast.BinaryExpr{
-			X:  CreateFloat(v1 - v2),
-			Op: token.SUB,
-			Y:  leftBin.Y,
-		}, nil
-	}
-	// from:
-	// number1 - (number2 - ...)
-	// to:
-	// (number1 - number2) + (...)
-	return true, &goast.BinaryExpr{
-		X:  CreateFloat(v1 - v2),
-		Op: token.ADD,
-		Y:  leftBin.Y,
-	}, nil
+	return false, nil, nil
 }
 
 func (s *sm) oneMul(a goast.Expr) (changed bool, r goast.Expr, _ error) {
@@ -2073,129 +2035,6 @@ func (s *sm) insideParen(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	if u, ok := a.(*goast.ParenExpr); ok {
 		return true, u.X, nil
 	}
-	return false, nil, nil
-}
-
-func (s *sm) openParenLeft(a goast.Expr) (changed bool, r goast.Expr, _ error) {
-	v, ok := a.(*goast.BinaryExpr)
-	if !ok {
-		return false, nil, nil
-	}
-
-	if v.Op == token.ADD {
-		// from:
-		//	any1 + any1
-		// to:
-		//	2.000 * any1
-		if AstToStr(v.X) == AstToStr(v.Y) {
-			return true, &goast.BinaryExpr{
-				X:  CreateFloat(2.000),
-				Op: token.MUL,
-				Y:  v.X,
-			}, nil
-		}
-
-		// from:
-		//	any1 + number * any1
-		// to:
-		//	(number+1) * any1
-		x, y := v.X, v.Y
-		for i := 0; i < 2; i++ {
-			if right, ok := y.(*goast.BinaryExpr); ok && right.Op == token.MUL {
-				if ok, _ := isNumber(right.X); ok {
-					if AstToStr(x) == AstToStr(right.Y) {
-						return true, &goast.BinaryExpr{
-							X: &goast.BinaryExpr{
-								X:  CreateFloat(1.000),
-								Op: token.ADD,
-								Y:  right.X,
-							},
-							Op: token.MUL,
-							Y:  x,
-						}, nil
-					}
-				}
-			}
-			x, y = y, x // swap
-		}
-
-		// from:
-		//	number1 * any1 + number2 * any1
-		// to:
-		//	(number1+number2) * any1
-		if left, ok := v.X.(*goast.BinaryExpr); ok && left.Op == token.MUL {
-			if ok, _ := isNumber(left.X); ok {
-				if right, ok := v.Y.(*goast.BinaryExpr); ok && right.Op == token.MUL {
-					if ok, _ := isNumber(right.X); ok {
-						if AstToStr(left.Y) == AstToStr(right.Y) {
-							return true, &goast.BinaryExpr{
-								X: &goast.BinaryExpr{
-									X:  left.X,
-									Op: token.ADD,
-									Y:  right.X,
-								},
-								Op: token.MUL,
-								Y:  left.Y,
-							}, nil
-						}
-					}
-				}
-			}
-		}
-	}
-
-	if v.Op == token.SUB {
-		// from:
-		//	any1 - any1
-		// to:
-		//	0
-		if AstToStr(v.X) == AstToStr(v.Y) {
-			return true, CreateFloat(0.000), nil
-		}
-
-		// from:
-		//	any1 - (-number)*any2
-		// to:
-		//	any1 + number * any2
-		if right, ok := v.Y.(*goast.BinaryExpr); ok && right.Op == token.MUL {
-			if ok, val := isNumber(right.X); ok && val < 0.0 {
-				return true, &goast.BinaryExpr{
-					X:  v.X,
-					Op: token.ADD,
-					Y: &goast.BinaryExpr{
-						X:  CreateFloat(-val),
-						Op: token.MUL,
-						Y:  right.Y,
-					},
-				}, nil
-			}
-		}
-	}
-
-	// from:
-	// (... +/- ...) / any
-	// to:
-	// (.../any) +/- (.../any)
-	if v.Op == token.QUO {
-		if bin, ok := v.X.(*goast.BinaryExpr); ok && (bin.Op == token.ADD || bin.Op == token.SUB) {
-			if ok, _ := isNumber(v.Y); ok || s.isConstant(v.Y) {
-				return true, &goast.BinaryExpr{
-					X: &goast.BinaryExpr{
-						X:  bin.X,
-						Op: token.QUO,
-						Y:  v.Y,
-					},
-					Op: bin.Op,
-					Y: &goast.BinaryExpr{
-						X:  bin.Y,
-						Op: token.QUO,
-						Y:  v.Y,
-					},
-				}, nil
-			}
-		}
-	}
-
 	return false, nil, nil
 }
 
