@@ -581,6 +581,10 @@ func Test(t *testing.T) {
 			expr: "integral(d(EA*q1/L-EA*q4/L,q1),q1,0,q1);constant(EA,L,x); variable(q1)",
 			out:  "EA*q1/L",
 		},
+		{
+			expr: "-18.00000*(EA*(q5*(q5*(q6*q2)))/(L*(L*(L*(L*(L*L))))));constant(q2,q5,q6,L)",
+			out:"-18.000*(q2*(q5*(q5*(q6*EA)))/(L*(L*(L*(L*(L*L))))))",
+		},
 	}
 
 	for i := range tcs {
