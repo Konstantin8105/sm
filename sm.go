@@ -1190,52 +1190,101 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	}
 
 	if sum := parseSummArray(a); 1 < len(sum) {
-		for i := range sum {
+		amountNeg := 0
+		for i := 0; i < len(sum); i++ {
 			if i == 0 {
 				continue
 			}
 			s := []sliceSumm(sum)
-			if strings.HasPrefix(AstToStr(s[i].value), "-") {
-				s[i].isNegative = !s[i].isNegative
-				s[i].value = &goast.BinaryExpr{
-					X:  CreateFloat(-1),
-					Op: token.MUL,
-					Y:  s[i].value,
-				}
-				return true, sum.toAst(), nil
-			}
-		}
-		for i := range sum {
-			for j := range sum {
-				if j <= i {
-					continue
-				}
-				if AstToStr(sum[i].value) != AstToStr(sum[j].value) {
-					continue
-				}
-				if sum[i].isNegative != sum[j].isNegative {
-					// remove 2 elements
-					var s summSlice
-					s = append(s, sum[:i]...)
-					s = append(s, sum[i+1:j]...)
-					s = append(s, sum[j+1:]...)
-					if 0 < len(s) {
-						return true, s.toAst(), nil
+			if bin, ok := s[i].value.(*goast.BinaryExpr); ok && bin.Op == token.MUL {
+				if ok, n := isNumber(bin.X); ok && n < 0 {
+					s[i].isNegative = !s[i].isNegative
+					if n == 0.0 {
+						s[i].value = CreateFloat(0)
+					} else if -n == 1.0 {
+						s[i].value = bin.Y
 					} else {
-						return true, CreateFloat(0), nil
+						s[i].value = &goast.BinaryExpr{
+							X:  CreateFloat(-n),
+							Op: token.MUL,
+							Y:  bin.Y,
+						}
+					}
+					amountNeg++
+					i--
+					continue
+				}
+			}
+			if bin, ok := s[i].value.(*goast.BinaryExpr); ok && bin.Op == token.QUO {
+				if up, ok := bin.X.(*goast.BinaryExpr); ok && up.Op == token.MUL {
+					if ok, n := isNumber(up.X); ok && n < 0 {
+						s[i].isNegative = !s[i].isNegative
+						if n == 0 {
+							s[i].value = CreateFloat(0)
+						} else if -n == 1.0 {
+							s[i].value = &goast.BinaryExpr{
+								X:  up.Y,
+								Op: token.QUO,
+								Y:  bin.Y,
+							}
+						} else {
+							s[i].value = &goast.BinaryExpr{
+								X: &goast.BinaryExpr{
+									X:  CreateFloat(-n),
+									Op: token.MUL,
+									Y:  up.Y,
+								},
+								Op: token.QUO,
+								Y:  bin.Y,
+							}
+						}
+						amountNeg++
+						i--
+						continue
 					}
 				}
-				// summ of 2 same
-				sum[i] = sliceSumm{
-					isNegative: false,
-					value: &goast.BinaryExpr{
-						X:  CreateFloat(2),
-						Op: token.MUL,
-						Y:  sum[i].toAst(),
-					},
+			}
+		}
+		if 0 < amountNeg {
+			return true, sum.toAst(), nil
+		}
+		{
+			strsumm := make([]string, len(sum))
+			for i := range sum {
+				strsumm[i] = AstToStr(sum[i].value)
+			}
+			for i := range sum {
+				for j := range sum {
+					if j <= i {
+						continue
+					}
+					if strsumm[i] != strsumm[j] {
+						continue
+					}
+					// i < j
+					if sum[i].isNegative != sum[j].isNegative {
+						// remove 2 elements
+						sum = append(sum[:j], sum[j+1:]...)
+						sum = append(sum[:i], sum[i+1:]...)
+						if 0 < len(sum) {
+							return true, sum.toAst(), nil
+						} else {
+							return true, CreateFloat(0), nil
+						}
+					} else {
+						// summ of 2 same
+						sum[i] = sliceSumm{
+							isNegative: false,
+							value: &goast.BinaryExpr{
+								X:  CreateFloat(2),
+								Op: token.MUL,
+								Y:  sum[i].toAst(),
+							},
+						}
+						sum = append(sum[:j], sum[j+1:]...)
+						return true, sum.toAst(), nil
+					}
 				}
-				sum = append(sum[:j], sum[j+1:]...)
-				return true, sum.toAst(), nil
 			}
 		}
 
@@ -2417,23 +2466,21 @@ func CreateFloat(value interface{}) *goast.BasicLit {
 }
 
 func isNumber(node goast.Node) (ok bool, val float64) {
-	unary := 1.0
 	if un, ok := node.(*goast.UnaryExpr); ok {
+		ok, val = isNumber(un.X)
 		if un.Op == token.SUB {
-			unary = -1.0
-			node = un.X
-		} else if un.Op == token.ADD {
-			unary = 1.0
-			node = un.X
-		} else {
-			return false, 0.0
+			return ok, val * (-1)
 		}
+		return ok, val
+	}
+	if par, ok := node.(*goast.ParenExpr); ok {
+		return isNumber(par.X)
 	}
 	if x, ok := node.(*goast.BasicLit); ok {
 		if x.Kind == token.INT || x.Kind == token.FLOAT {
 			val, err := strconv.ParseFloat(x.Value, 64)
 			if err == nil {
-				return true, unary * val
+				return true, val
 			}
 			panic(err)
 		}
