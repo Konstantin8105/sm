@@ -2339,10 +2339,6 @@ func (s *sm) sort(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		for i := 0; i < len(q.up); i++ {
 			if ok, n := isNumber(q.up[i]); ok {
 				numbers *= n
-				// 				if len(q.up) == 1 && i == 0 {
-				// 					q.up = append([]goast.Expr{}, CreateFloat(numbers))
-				// 					break
-				// 				}
 				q.up = append(q.up[:i], q.up[i+1:]...)
 				i--
 				amount++
@@ -2351,11 +2347,6 @@ func (s *sm) sort(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		for i := 0; i < len(q.do); i++ {
 			if ok, n := isNumber(q.do[i]); ok {
 				numbers /= n
-				// 				if len(q.do) == 1 && i == 0 {
-				// 					q.up = append([]goast.Expr{}, CreateFloat(numbers))
-				// 					q.do = nil
-				// 					break
-				// 				}
 				q.do = append(q.do[:i], q.do[i+1:]...)
 				i--
 				amount++
@@ -2378,37 +2369,48 @@ func (s *sm) sort(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	}
 
 	if summ := parseSummArray(a); 0 < len(summ) {
-		// 		debug(a)
-		// 		debug(summ[i].value)
-		// 		fmt.Println("---------------------")
-		// 		for i := range summ {
-		// 			fmt.Println(">>>>", i, AstToStr(summ[i].toAst()))
-		// 		}
-// 		amount := 0
-// 		for i := range summ {
-// 			if un, ok := summ[i].value.(*goast.UnaryExpr); ok {
-// 				summ[i].value = un.X
-// 				if un.Op == token.SUB {
-// 					 					fmt.Println("CCCCCCCCCCC")
-// 					summ[i].isNegative = !summ[i].isNegative
-// 				}
-// 				amount++
-// 			}
-// 		}
-// 		// 		fmt.Println(">>>", AstToStr(a))
-// 		// 		fmt.Println(">>>", AstToStr(summ.toAst()))
-// 		// 		fmt.Println(	">>>>>>>>>>>>>", changed)
-// 		// 		for i := range summ {
-// 		// 			fmt.Println("<<<<", i, AstToStr(summ[i].toAst()))
-// 		// 		}
-// 		if 0 < amount {
-// 			fmt.Println("YYYYYYYYYYYYYYY2")
-// 			return true, summ.toAst(), nil
-// 		}
+		amount := 0
+		for i := range summ {
+			bin, ok := summ[i].value.(*goast.BinaryExpr)
+			if !ok || bin.Op != token.QUO {
+				continue
+			}
+			if un, ok := bin.X.(*goast.UnaryExpr); ok {
+				summ[i].value = &goast.UnaryExpr{
+					Op: un.Op,
+					X: &goast.BinaryExpr{
+						X:  un.X,
+						Op: token.QUO,
+						Y:  bin.Y,
+					},
+				}
+				amount++
+			}
+		}
+		if 0 < amount {
+			return true, summ.toAst(), nil
+		}
+	}
+
+	if summ := parseSummArray(a); 0 < len(summ) {
+		if 1 < len(summ) {
+			amount := 0
+			for i := range summ {
+				if un, ok := summ[i].value.(*goast.UnaryExpr); ok {
+					summ[i].value = un.X
+					if un.Op == token.SUB {
+						summ[i].isNegative = !summ[i].isNegative
+					}
+					amount++
+				}
+			}
+			if 0 < amount {
+				return true, summ.toAst(), nil
+			}
+		}
 		for i := 1; i < len(summ); i++ {
 			if ok, _ := isNumber(summ[i].value); ok {
 				summ[0], summ[i] = summ[i], summ[0] // swap
-				// 				fmt.Println("YYYYYYYYYYYYYYY3")
 				return true, summ.toAst(), nil
 			}
 		}
@@ -2730,7 +2732,6 @@ func (s summSlice) toAst() goast.Expr {
 	}
 	v := s[0].toAst()
 	for i := 1; i < len(s); i++ {
-		// fmt.Println("+----------------", s[i].isNegative, AstToStr(s[i].value))
 		if s[i].isNegative {
 			v = &goast.BinaryExpr{X: v, Op: token.SUB, Y: s[i].value}
 		} else {
@@ -2756,14 +2757,10 @@ func parseSummArray(e goast.Expr) (s summSlice) {
 	switch v := e.(type) {
 	case *goast.ParenExpr:
 		return parseSummArray(v.X)
-	case *goast.UnaryExpr:
-		ss := parseSummArray(v.X)
-		if v.Op == token.SUB {
-			for i := range ss {
-				ss[i].isNegative = !ss[i].isNegative
-			}
-		}
-		return ss
+
+	// DO NOT ADD
+	// 	case *goast.UnaryExpr:
+
 	case *goast.BinaryExpr:
 		if v.Op == token.ADD || v.Op == token.SUB {
 			left, right := parseSummArray(v.X), parseSummArray(v.Y)
