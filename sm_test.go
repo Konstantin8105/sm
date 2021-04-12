@@ -479,15 +479,15 @@ func Test(t *testing.T) {
 		},
 		{
 			expr: "36.000*EJ/(l*(l*l))+(0.000-72.000*(EJ*integral(x/1.000, x, 0.000, l))/(l*(l*(l*(l*l)))))+(0.000-72.000*(EJ*integral(x/1.000, x, 0.000, l))/(l*(l*(l*(l*l))))+47.952*EJ/(l*(l*l))); variable(x); constant(l);",
-			out:  "11.952*(EJ/(l*(l*l)))",
+			out: "11.952*EJ/(l*(l*l))", // "11.952*(EJ/(l*(l*l)))",
 		},
 		{
 			expr: "0.00+ 1/(36.000/(l*(l*l))*(1.000/(l*l)))-0.00",
-			out:  "l*(l*(l*(l*l)))/36.000",
+			out:  "0.028*(l*(l*(l*(l*l))))", // "l*(l*(l*(l*l)))/36.000",
 		},
 		{
 			expr: "1/(36.000*EJ/(l*(l*l))+(0.000-72.000*(EJ*integral(x/1.000, x, 0.000, l))/(l*(l*(l*(l*l)))))+(0.000-72.000*(EJ*integral(x/1.000, x, 0.000, l))/(l*(l*(l*(l*l))))+47.952*EJ/(l*(l*l)))); variable(x); constant(l);",
-			out:  "1.000/(11.952*(EJ/(l*(l*l))))",
+			out:  "0.084*(l*(l*l))/EJ", // "1.000/(11.952*(EJ/(l*(l*l))))",
 		},
 		{
 			expr: "-5*x/y+2*x-0+0+5*y+3*x-1*y+12*x/y+0-0+0-0",
@@ -606,11 +606,11 @@ func Test(t *testing.T) {
 			if strings.Contains(act, "integral") {
 				t.Errorf("found: %s", "integral")
 			}
-			if act != ec {
-				t.Fatalf("Is not same \nActual : '%s'\nExpect : '%s'", act, tcs[i].out)
-			}
 			if strings.Contains(act, "+-") {
 				t.Errorf("Not valid +- sign confuse")
+			}
+			if act != ec {
+				t.Fatalf("Is not same \nActual : '%s'\nExpect : '%s'", act, tcs[i].out)
 			}
 
 			// TODO:
