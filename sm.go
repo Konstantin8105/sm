@@ -496,6 +496,10 @@ func (s *sm) walk(a goast.Expr) (c bool, result goast.Expr, _ error) {
 			return false, a, err
 		}
 		if changed {
+			// if numRule != 0 {
+			// 	fmt.Fprintf(os.Stdout, "> rule = %d\n", numRule)
+			// 	fmt.Fprintf(os.Stdout, "> from: %s to %s\n", AstToStr(a), AstToStr(r))
+			// }
 			_ = numRule
 			a, err = parser.ParseExpr(AstToStr(r))
 			if err != nil {
@@ -1082,7 +1086,7 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		}
 	}
 
-	{
+	if 0 < len(q.do) && 0 < len(q.up) {
 		amount := 0
 		upstr := make([]string, len(q.up))
 		for i := range q.up {
@@ -1228,45 +1232,6 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		if 0 < amountNeg {
 			return true, sum.toAst(), nil
 		}
-		{
-			strsumm := make([]string, len(sum))
-			for i := range sum {
-				strsumm[i] = AstToStr(sum[i].value)
-			}
-			for i := range sum {
-				for j := range sum {
-					if j <= i {
-						continue
-					}
-					if strsumm[i] != strsumm[j] {
-						continue
-					}
-					// i < j
-					if sum[i].isNegative != sum[j].isNegative {
-						// remove 2 elements
-						sum = append(sum[:j], sum[j+1:]...)
-						sum = append(sum[:i], sum[i+1:]...)
-						if 0 < len(sum) {
-							return true, sum.toAst(), nil
-						} else {
-							return true, CreateFloat(0), nil
-						}
-					} else {
-						// summ of 2 same
-						sum[i] = sliceSumm{
-							isNegative: false,
-							value: &goast.BinaryExpr{
-								X:  CreateFloat(2),
-								Op: token.MUL,
-								Y:  sum[i].toAst(),
-							},
-						}
-						sum = append(sum[:j], sum[j+1:]...)
-						return true, sum.toAst(), nil
-					}
-				}
-			}
-		}
 
 		type eqn struct {
 			coeff float64
@@ -1320,6 +1285,10 @@ func (s *sm) binaryNumber(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		if len(eqns) < size {
 			s := make([]sliceSumm, len(eqns))
 			for i := range eqns {
+				if eqns[i].coeff == 0 {
+					s[i].value = CreateFloat(0)
+					continue
+				}
 				if eqns[i].coeff < 0 {
 					s[i].isNegative = true
 					eqns[i].coeff = -eqns[i].coeff
@@ -1851,12 +1820,12 @@ func (s *sm) summOfParts(ps []goast.Expr) (r goast.Expr, _ error) {
 
 		if i == 0 {
 			result = goast.NewIdent(out)
-		} else {
-			result = &goast.BinaryExpr{
-				X:  result,
-				Op: token.ADD,
-				Y:  goast.NewIdent(out),
-			}
+			continue
+		}
+		result = &goast.BinaryExpr{
+			X:  result,
+			Op: token.ADD,
+			Y:  goast.NewIdent(out),
 		}
 
 		out, err = parse(result)
@@ -2279,8 +2248,7 @@ func (s *sm) mulConstToMatrix(a goast.Expr) (changed bool, r goast.Expr, _ error
 }
 
 func (s *sm) sort(a goast.Expr) (changed bool, r goast.Expr, _ error) {
-
-	{
+	if summ := parseSummArray(a); 0 < len(summ) {
 		sort := func(es []goast.Expr) (changed bool) {
 			amount := 0
 		again:
@@ -2306,10 +2274,18 @@ func (s *sm) sort(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 			}
 			return false
 		}
-		q := parseQuoArray(a)
-		u, d := sort(q.up), sort(q.do)
-		if u || d {
-			return true, q.toAst(), nil
+		amount := 0
+		for i := range summ {
+			q := parseQuoArray(summ[i].value)
+			u, d := sort(q.up), sort(q.do)
+			if u || d {
+				summ[i].value = q.toAst()
+				amount++
+				// return true, q.toAst(), nil
+			}
+		}
+		if 0 < amount {
+			return true, summ.toAst(), nil
 		}
 	}
 
