@@ -468,54 +468,40 @@ func (s *sm) walk(a goast.Expr) (c bool, result goast.Expr, _ error) {
 	}
 	s.iter++
 
-	changed, r, err := s.deeper(a, s.walk)
-	if err != nil {
-		return false, a, err
-	}
-	if changed {
-		a, err = parser.ParseExpr(AstToStr(r))
+	for numRule, rule := range []func(goast.Expr) (bool, goast.Expr, error){
+		func(a goast.Expr) (bool, goast.Expr, error) {
+			return s.deeper(a, s.walk)
+		},
+		s.constants,
+		s.openParenRight,
+		s.insideParen,
+		s.sort,
+		s.functionPow,
+		s.oneMul,
+		s.divide,
+		s.binaryNumber,
+		s.zeroValueMul,
+		s.matrixTranspose,
+		s.matrixDet,
+		s.matrixInverse,
+		s.matrixMultiply,
+		s.matrixSum,
+		s.mulConstToMatrix,
+		s.differential,
+		s.integral,
+		s.inject,
+	} {
+		changed, r, err := rule(a)
 		if err != nil {
-			return
+			return false, a, err
 		}
-		changed = true
-		return changed, a, err
-	}
-
-	// try simplification
-	{
-		for numRule, rule := range []func(goast.Expr) (bool, goast.Expr, error){
-			s.constants,
-			s.openParenRight,
-			s.insideParen,
-			s.sort,
-			s.functionPow,
-			s.oneMul,
-			s.divide,
-			s.binaryNumber,
-			s.zeroValueMul,
-			s.divideDivide,
-			s.matrixTranspose,
-			s.matrixDet,
-			s.matrixInverse,
-			s.matrixMultiply,
-			s.matrixSum,
-			s.mulConstToMatrix,
-			s.differential,
-			s.integral,
-			s.inject,
-		} {
-			changed, r, err := rule(a)
+		if changed {
+			_ = numRule
+			a, err = parser.ParseExpr(AstToStr(r))
 			if err != nil {
-				return false, a, err
+				return
 			}
-			if changed {
-				_ = numRule
-				a, err = parser.ParseExpr(AstToStr(r))
-				if err != nil {
-					return
-				}
-				return true, a, err
-			}
+			return true, a, err
 		}
 	}
 
@@ -2422,7 +2408,6 @@ func (s *sm) constants(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	if summ := parseSummArray(a); 1 < len(summ) {
 		var numbers float64 = 0.0
 		amount := 0
-	again:
 		for i := 0; i < len(summ); i++ {
 			ok, n := isNumber(summ[i].value)
 			if !ok {
@@ -2438,7 +2423,8 @@ func (s *sm) constants(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 			}
 			summ = append(summ[:i], summ[i+1:]...)
 			amount++
-			goto again
+			i--
+			continue
 		}
 		if (1 < amount) || (1 == amount && numbers == 0) {
 			if numbers == 0 {
