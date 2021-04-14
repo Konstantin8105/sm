@@ -8,6 +8,7 @@ import (
 	"go/printer"
 	"go/token"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -63,6 +64,20 @@ func (s sm) isConstant(e goast.Expr) bool {
 		if s.cons[i] == name {
 			return true
 		}
+	}
+	isFunc, isVars := false, false
+	for i := range s.funs {
+		if s.funs[i].name == name {
+			isFunc = true
+		}
+	}
+	for i := range s.vars {
+		if s.vars[i] == name {
+			isVars = true
+		}
+	}
+	if !isFunc && !isVars {
+		return true
 	}
 
 	return false
@@ -268,6 +283,7 @@ func (s *sm) run() (out string, err error) {
 	l := list.New()
 	var changed bool
 	var k goast.Expr
+	repeat, repeatMax := 0, 10
 	for {
 		// remove parens
 		a, err = s.clean(a)
@@ -293,7 +309,10 @@ func (s *sm) run() (out string, err error) {
 			for e := l.Front(); e != nil; e = e.Next() {
 				listStr := e.Value.(string)
 				if listStr == str {
-					return "", fmt.Errorf("Repeat result: %s", str)
+					repeat++
+					if repeatMax < repeat {
+						return "", fmt.Errorf("Repeat result: %s", str)
+					}
 				}
 			}
 			a = k
@@ -473,7 +492,7 @@ func (s *sm) walk(a goast.Expr) (c bool, result goast.Expr, _ error) {
 			return s.deeper(a, s.walk)
 		},
 		s.constants,
-		s.openParenRight,
+		s.openParen,
 		s.insideParen,
 		s.sort,
 		s.functionPow,
@@ -496,11 +515,12 @@ func (s *sm) walk(a goast.Expr) (c bool, result goast.Expr, _ error) {
 			return false, a, err
 		}
 		if changed {
-			// if numRule != 0 {
-			// 	fmt.Fprintf(os.Stdout, "> rule = %d\n", numRule)
-			// 	fmt.Fprintf(os.Stdout, "> from: %s to %s\n", AstToStr(a), AstToStr(r))
-			// }
 			_ = numRule
+			_ = os.Stdout
+			// if numRule != 0 {
+			//    fmt.Fprintf(os.Stdout, "> rule = %d\n", numRule)
+			//    fmt.Fprintf(os.Stdout, "> from: %s --->to----> %s\n", AstToStr(a), AstToStr(r))
+			// }
 			a, err = parser.ParseExpr(AstToStr(r))
 			if err != nil {
 				return
@@ -1732,36 +1752,64 @@ func (s *sm) functionPow(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	}, nil
 }
 
-func (s *sm) openParenRight(a goast.Expr) (changed bool, r goast.Expr, _ error) {
-	bin, ok := a.(*goast.BinaryExpr)
-	if !ok || bin.Op != token.MUL {
+func (s *sm) openParen(a goast.Expr) (changed bool, r goast.Expr, _ error) {
+	ma := parseQuoArray(a)
+	if len(ma.up) < 2 {
 		return false, nil, nil
 	}
 
 	// from : (... -+ ... -+ ...) * (... -+ ... -+ ...)
 	// to   :
-	left := parseSummArray(bin.X)
-	right := parseSummArray(bin.Y)
-	if (0 < len(left) && 1 < len(right)) ||
-		(1 < len(left) && 0 < len(right)) {
-		var results []goast.Expr
-		for i := range left {
-			for j := range right {
-				results = append(results, &goast.BinaryExpr{
-					X:  left[i].toAst(),
-					Op: token.MUL,
-					Y:  right[j].toAst(),
-				})
-			}
+	do := ma.do
+
+	ss := make([][]sliceSumm, len(ma.up))
+	ok := false
+	size := 1
+	for i := range ma.up {
+		ss[i] = parseSummArray(ma.up[i])
+		if 1 < len(ss[i]) {
+			ok = true
 		}
-		r, err := s.summOfParts(results)
-		if err != nil {
-			return false, nil, err
-		}
-		return true, r, err
+		size *= len(ss[i])
 	}
 
-	return false, nil, nil
+	if !ok {
+		return false, nil, nil
+	}
+
+	results := make([]goast.Expr, size)
+	for ir := range results {
+		results[ir] = CreateFloat(1)
+	}
+	repeat := size
+	for i := range ss {
+		repeat /= len(ss[i])
+		index := 0
+		for tu := 0; tu < size/(repeat*len(ss[i])); tu++ {
+			for pos := 0; pos < len(ss[i]); pos++ {
+				for t := 0; t < repeat; t++ {
+					results[index] = &goast.BinaryExpr{
+						X:  results[index],
+						Op: token.MUL,
+						Y:  ss[i][pos].toAst(),
+					}
+					index++
+				}
+			}
+		}
+	}
+	for i := range results {
+		var q quoArray
+		q.up = []goast.Expr{results[i]}
+		q.do = do
+		results[i] = q.toAst()
+	}
+	r, err := s.summOfParts(results)
+	if err != nil {
+		return false, nil, err
+	}
+
+	return true, r, err
 }
 
 func (s *sm) summOfParts(ps []goast.Expr) (r goast.Expr, _ error) {
@@ -1842,6 +1890,20 @@ func (s *sm) insideParen(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	if u, ok := a.(*goast.ParenExpr); ok {
 		return true, u.X, nil
 	}
+	if bin, ok := a.(*goast.BinaryExpr); ok && (bin.Op == token.ADD || bin.Op == token.SUB) {
+		ok := false
+		if u, ok := bin.X.(*goast.ParenExpr); ok {
+			bin.X = u.X
+			ok = true
+		}
+		if u, ok := bin.Y.(*goast.ParenExpr); ok {
+			bin.Y = u.X
+			ok = true
+		}
+		if ok {
+			return true, &goast.BinaryExpr{X: bin.X, Op: bin.Op, Y: bin.Y}, nil
+		}
+	}
 	return false, nil, nil
 }
 
@@ -1918,6 +1980,10 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 		begin    = call.Args[2]
 		finish   = call.Args[3]
 	)
+
+	if !s.isVariable(variable) {
+		return false, nil, fmt.Errorf("Variable of integral is not variable: %s", AstToStr(variable))
+	}
 
 	// integral(...+...)
 	// integral(...)+integral(...)
@@ -2247,27 +2313,42 @@ func (s *sm) mulConstToMatrix(a goast.Expr) (changed bool, r goast.Expr, _ error
 	return false, nil, nil
 }
 
+var sortCounter [5]int
+
 func (s *sm) sort(a goast.Expr) (changed bool, r goast.Expr, _ error) {
+	// defer func(){
+	// 	fmt.Println("sort counter: ", sortCounter)
+	// }()
 	if summ := parseSummArray(a); 0 < len(summ) {
 		sort := func(es []goast.Expr) (changed bool) {
 			amount := 0
+			estr := make([]string, len(es))
+			for i := range es {
+				estr[i] = AstToStr(es[i])
+			}
 		again:
+			runAgain := false
 			for i := 1; i < len(es); i++ {
 				if ok, _ := isNumber(es[i-1]); ok {
 					continue
 				}
 				if !s.isConstant(es[i-1]) && s.isConstant(es[i]) {
 					es[i-1], es[i] = es[i], es[i-1]
+					estr[i-1], estr[i] = estr[i], estr[i-1]
 					amount++
-					goto again
+					runAgain = true
 				}
 				if s.isConstant(es[i-1]) && s.isConstant(es[i]) {
-					if AstToStr(es[i-1]) > AstToStr(es[i]) {
+					if estr[i-1] > estr[i] {
 						es[i-1], es[i] = es[i], es[i-1]
+						estr[i-1], estr[i] = estr[i], estr[i-1]
 						amount++
-						goto again
+						runAgain = true
 					}
 				}
+			}
+			if runAgain {
+				goto again
 			}
 			if 0 < amount {
 				return true
@@ -2281,10 +2362,10 @@ func (s *sm) sort(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 			if u || d {
 				summ[i].value = q.toAst()
 				amount++
-				// return true, q.toAst(), nil
 			}
 		}
 		if 0 < amount {
+			sortCounter[0]++
 			return true, summ.toAst(), nil
 		}
 	}
@@ -2326,6 +2407,7 @@ func (s *sm) sort(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 			changed = true
 		}
 		if changed {
+			sortCounter[1]++
 			return true, q.toAst(), nil
 		}
 	}
@@ -2350,6 +2432,7 @@ func (s *sm) sort(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 			}
 		}
 		if 0 < amount {
+			sortCounter[2]++
 			return true, summ.toAst(), nil
 		}
 	}
@@ -2358,6 +2441,9 @@ func (s *sm) sort(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 		if 1 < len(summ) {
 			amount := 0
 			for i := range summ {
+				if i == 0 {
+					continue
+				}
 				if un, ok := summ[i].value.(*goast.UnaryExpr); ok {
 					summ[i].value = un.X
 					if un.Op == token.SUB {
@@ -2367,12 +2453,14 @@ func (s *sm) sort(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 				}
 			}
 			if 0 < amount {
+				sortCounter[3]++
 				return true, summ.toAst(), nil
 			}
 		}
 		for i := 1; i < len(summ); i++ {
 			if ok, _ := isNumber(summ[i].value); ok {
 				summ[0], summ[i] = summ[i], summ[0] // swap
+				sortCounter[4]++
 				return true, summ.toAst(), nil
 			}
 		}
