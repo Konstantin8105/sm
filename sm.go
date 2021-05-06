@@ -2320,151 +2320,162 @@ func (s *sm) sort(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	// 	fmt.Println("sort counter: ", sortCounter)
 	// }()
 	if summ := parseSummArray(a); 0 < len(summ) {
-		sort := func(es []goast.Expr) (changed bool) {
-			amount := 0
-			estr := make([]string, len(es))
-			for i := range es {
-				estr[i] = AstToStr(es[i])
-			}
-		again:
-			runAgain := false
-			for i := 1; i < len(es); i++ {
-				if ok, _ := isNumber(es[i-1]); ok {
-					continue
+		{
+			sort := func(es []goast.Expr) (changed bool) {
+				amount := 0
+				estr := make([]string, len(es))
+				for i := range es {
+					estr[i] = AstToStr(es[i])
 				}
-				if !s.isConstant(es[i-1]) && s.isConstant(es[i]) {
-					es[i-1], es[i] = es[i], es[i-1]
-					estr[i-1], estr[i] = estr[i], estr[i-1]
-					amount++
-					runAgain = true
-				}
-				if s.isConstant(es[i-1]) && s.isConstant(es[i]) {
-					if estr[i-1] > estr[i] {
+			again:
+				runAgain := false
+				for i := 1; i < len(es); i++ {
+					if ok, _ := isNumber(es[i-1]); ok {
+						continue
+					}
+					if !s.isConstant(es[i-1]) && s.isConstant(es[i]) {
 						es[i-1], es[i] = es[i], es[i-1]
 						estr[i-1], estr[i] = estr[i], estr[i-1]
 						amount++
 						runAgain = true
 					}
+					if s.isConstant(es[i-1]) && s.isConstant(es[i]) {
+						if estr[i-1] > estr[i] {
+							es[i-1], es[i] = es[i], es[i-1]
+							estr[i-1], estr[i] = estr[i], estr[i-1]
+							amount++
+							runAgain = true
+						}
+					}
 				}
-			}
-			if runAgain {
-				goto again
-			}
-			if 0 < amount {
-				return true
-			}
-			return false
-		}
-		amount := 0
-		for i := range summ {
-			q := parseQuoArray(summ[i].value)
-			u, d := sort(q.up), sort(q.do)
-			if u || d {
-				summ[i].value = q.toAst()
-				amount++
-			}
-		}
-		if 0 < amount {
-			sortCounter[0]++
-			return true, summ.toAst(), nil
-		}
-	}
-
-	{
-		q := parseQuoArray(a)
-
-		var firstNumber bool
-		if 0 < len(q.up) {
-			firstNumber, _ = isNumber(q.up[0])
-		}
-		var numbers float64 = 1
-		amount := 0
-		for i := 0; i < len(q.up); i++ {
-			if ok, n := isNumber(q.up[i]); ok {
-				numbers *= n
-				q.up = append(q.up[:i], q.up[i+1:]...)
-				i--
-				amount++
-			}
-		}
-		for i := 0; i < len(q.do); i++ {
-			if ok, n := isNumber(q.do[i]); ok {
-				numbers /= n
-				q.do = append(q.do[:i], q.do[i+1:]...)
-				i--
-				amount++
-			}
-		}
-		if numbers != 1.0 {
-			q.up = append(q.up, CreateFloat(numbers))
-			q.up[0], q.up[len(q.up)-1] = q.up[len(q.up)-1], q.up[0]
-		}
-
-		if 1 < amount {
-			changed = true
-		}
-		if !firstNumber && 1 == amount {
-			changed = true
-		}
-		if changed {
-			sortCounter[1]++
-			return true, q.toAst(), nil
-		}
-	}
-
-	if summ := parseSummArray(a); 0 < len(summ) {
-		amount := 0
-		for i := range summ {
-			bin, ok := summ[i].value.(*goast.BinaryExpr)
-			if !ok || bin.Op != token.QUO {
-				continue
-			}
-			if un, ok := bin.X.(*goast.UnaryExpr); ok {
-				summ[i].value = &goast.UnaryExpr{
-					Op: un.Op,
-					X: &goast.BinaryExpr{
-						X:  un.X,
-						Op: token.QUO,
-						Y:  bin.Y,
-					},
+				if runAgain {
+					goto again
 				}
-				amount++
+				if 0 < amount {
+					return true
+				}
+				return false
 			}
-		}
-		if 0 < amount {
-			sortCounter[2]++
-			return true, summ.toAst(), nil
-		}
-	}
-
-	if summ := parseSummArray(a); 0 < len(summ) {
-		if 1 < len(summ) {
 			amount := 0
 			for i := range summ {
-				if i == 0 {
+				q := parseQuoArray(summ[i].value)
+				u, d := sort(q.up), sort(q.do)
+				if u || d {
+					summ[i].value = q.toAst()
+					amount++
+				}
+			}
+			if 0 < amount {
+				sortCounter[0]++
+				return true, summ.toAst(), nil
+			}
+		}
+		{
+			amountgl := 0
+			for i := range summ {
+				q := parseQuoArray(summ[i].value)
+
+				var firstNumber bool
+				if 0 < len(q.up) {
+					firstNumber, _ = isNumber(q.up[0])
+				}
+				var numbers float64 = 1
+				amount := 0
+				for i := 0; i < len(q.up); i++ {
+					if ok, n := isNumber(q.up[i]); ok {
+						numbers *= n
+						q.up = append(q.up[:i], q.up[i+1:]...)
+						i--
+						amount++
+					}
+				}
+				for i := 0; i < len(q.do); i++ {
+					if ok, n := isNumber(q.do[i]); ok {
+						numbers /= n
+						q.do = append(q.do[:i], q.do[i+1:]...)
+						i--
+						amount++
+					}
+				}
+				if numbers != 1.0 {
+					q.up = append(q.up, CreateFloat(numbers))
+					q.up[0], q.up[len(q.up)-1] = q.up[len(q.up)-1], q.up[0]
+				}
+
+				if 1 < amount {
+					changed = true
+				}
+				if !firstNumber && 1 == amount {
+					changed = true
+				}
+				if changed {
+					sortCounter[1]++
+					amountgl++
+					summ[i].value = q.toAst()
+				}
+			}
+			if 0 < amountgl {
+				return true, summ.toAst(), nil
+			}
+		}
+		{
+			amount := 0
+			for i := range summ {
+				bin, ok := summ[i].value.(*goast.BinaryExpr)
+				if !ok || bin.Op != token.QUO {
 					continue
 				}
-				if un, ok := summ[i].value.(*goast.UnaryExpr); ok {
-					summ[i].value = un.X
-					if un.Op == token.SUB {
-						summ[i].isNegative = !summ[i].isNegative
+				if un, ok := bin.X.(*goast.UnaryExpr); ok {
+					summ[i].value = &goast.UnaryExpr{
+						Op: un.Op,
+						X: &goast.BinaryExpr{
+							X:  un.X,
+							Op: token.QUO,
+							Y:  bin.Y,
+						},
 					}
 					amount++
 				}
 			}
 			if 0 < amount {
-				sortCounter[3]++
+				sortCounter[2]++
 				return true, summ.toAst(), nil
 			}
 		}
-		for i := 1; i < len(summ); i++ {
-			if ok, _ := isNumber(summ[i].value); ok {
-				summ[0], summ[i] = summ[i], summ[0] // swap
-				sortCounter[4]++
-				return true, summ.toAst(), nil
+
+		{
+			if 1 < len(summ) {
+				amount := 0
+				for i := range summ {
+					if i == 0 {
+						continue
+					}
+					if un, ok := summ[i].value.(*goast.UnaryExpr); ok {
+						summ[i].value = un.X
+						if un.Op == token.SUB {
+							summ[i].isNegative = !summ[i].isNegative
+						}
+						amount++
+					}
+				}
+				if 0 < amount {
+					sortCounter[3]++
+					return true, summ.toAst(), nil
+				}
 			}
 		}
+		{
+			for i := 1; i < len(summ); i++ {
+				if ok, _ := isNumber(summ[i].value); ok {
+					summ[0], summ[i] = summ[i], summ[0] // swap
+					sortCounter[4]++
+					return true, summ.toAst(), nil
+				}
+			}
+		}
+
 	}
+
 	return false, nil, nil
 }
 
