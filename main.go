@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"os"
+
 	"github.com/Konstantin8105/sm"
 )
 
@@ -16,11 +17,14 @@ func main() {
 
 	expr := os.Args[1]
 	fmt.Fprintf(os.Stdout, "expr = %s\n", expr)
+	var err error
 
-	eq, err := sm.Sexpr(os.Stdout, expr)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v", err)
-		return
+	for iter := 0; iter < 2; iter++ {
+		expr, err = sm.Sexpr(os.Stdout, expr)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			return
+		}
 	}
-	fmt.Fprintf(os.Stdout, "%s\n", eq)
+	fmt.Fprintf(os.Stdout, "%s\n", expr)
 }
