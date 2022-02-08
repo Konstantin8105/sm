@@ -269,6 +269,8 @@ func Sexpr(o io.Writer, expr string) (out string, err error) {
 		}
 	}
 
+	// TODO : replace numbers(ints or floats) to constants and replace constant operations at last moment
+
 	return s.run()
 }
 
