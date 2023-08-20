@@ -175,10 +175,9 @@ type function struct {
 //
 // Keywords:
 //
-//	constant(a); for constants
-//	variables(a); for variables
-//  function(a,x,y,z,...); for function a(x,y,z)
-//
+//		constant(a); for constants
+//		variables(a); for variables
+//	 function(a,x,y,z,...); for function a(x,y,z)
 func Sexpr(o io.Writer, expr string) (out string, err error) {
 	if o == nil {
 		var buf bytes.Buffer
