@@ -213,10 +213,8 @@ type function struct {
 //	expr: "(a/b)/(c/d)",
 //	out:  "a * d / (b * c)",
 //	
-//	
 //	expr: "matrix(2+5,1,1)",
 //	out:  "matrix(7.000,1.000,1.000)",
-//	
 //	
 //	expr: "matrix(2+5,9,3, 5-1+0-0,2,2)*matrix(1-2,+5,2,1)",
 //	out:  "matrix(38.000,17.000,2.000,1.000)",
