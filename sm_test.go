@@ -361,7 +361,7 @@ var tcs = []struct {
 	},
 	{
 		expr: "integral(pow(x,2),x,1,2);variable(x)",
-		out:  "2.331",
+		out:  "2.333",
 	},
 
 	{
@@ -378,7 +378,7 @@ var tcs = []struct {
 	},
 	{
 		expr: "integral(pow(x,2),x,2,3);variable(x)",
-		out:  "6.327",
+		out:  "6.333",
 	},
 	{
 		expr: "integral(pow(x,3),x,2,3);variable(x)",
@@ -390,19 +390,19 @@ var tcs = []struct {
 	},
 	{
 		expr: "integral(pow(a*x,2),x,2,3);variable(x);constant(a)",
-		out:  "6.327*a*a",
+		out:  "6.333*a*a",
 	},
 	{
 		expr: "integral(a*pow(x,2),x,2,3);variable(x);constant(a)",
-		out:  "6.327*a",
+		out:  "6.333*a",
 	},
 	{
 		expr: "integral(a+a*pow(x,2)+pow(x,3)*a,x,2,3);variable(x);constant(a)",
-		out:  "23.577 * a",
+		out:  "23.583*a",
 	},
 	{
 		expr: "integral(pow(x,2),x,2,3);variable(x)",
-		out:  "6.327",
+		out:  "6.333",
 	},
 	{
 		expr: "integral(x*a*x*a*x*a,x,2,3);variable(x);constant(a)",
@@ -434,11 +434,11 @@ var tcs = []struct {
 	},
 	{
 		expr: "integral((2.000*(sin(q)*s)-3.000*(sin(q)*(s*s)))/r*(1.000/L), s, 0.000, 1.000);constant(q);constant(r);constant(L);variable(s)",
-		out:  "0.001*sin(q)/(L*r)",
+		out:  "0.000",
 	},
 	{
 		expr: " integral(s*(6.000/L*(s*(1.000/L))), s, 0.000, 1.000); constant(L);variable(s)",
-		out:  "1.998/(L*L)",
+		out:  "2.000/(L*L)",
 	},
 	{
 		expr: "integral(1.000/L*(-1.000/L)+v*(1.000/L*((sin(q)-sin(q)*s)/r)), s, 0.000, 1.000);constant(L,v,a,q,r); variable(s)",
@@ -455,6 +455,20 @@ var tcs = []struct {
 	{
 		expr: "integral(sin(q)/r, s, 0.000, 1.000); constant(q,r);variable(s)",
 		out:  "sin(q)/r",
+	},
+	// nested integral, where the integrand depends on both variables.
+	// the inner integral is taken first, the outer variable is a constant for it
+	{
+		expr: "integral(integral(xi*eta, xi, -1, 1), eta, -1, 1);variable(xi);variable(eta)",
+		out:  "0.000",
+	},
+	{
+		expr: "integral(integral(xi*xi*eta*eta, xi, -1, 1), eta, -1, 1);variable(xi);variable(eta)",
+		out:  "0.444",
+	},
+	{
+		expr: "integral(integral(xi+eta, xi, -1, 1), eta, -1, 1);variable(xi);variable(eta)",
+		out:  "0.000",
 	},
 	{
 		expr: "det(matrix(a,b,c,d,2,2))",
@@ -542,7 +556,7 @@ var tcs = []struct {
 	},
 	{
 		expr: "integral((4.000000*(x*x)/(l*l)+-12.000000*(x*(x*x))/(l*(l*l))+9.000000*(x*(x*(x*x)))/(l*(l*(l*l)))), x, 0.000000, l);constant(l);variable(x)",
-		out:  "0.132*l",
+		out:  "0.133*l",
 	},
 	{
 		expr: "x*((0.000000-3.000000*(l*l))/(l*(l*(l*l))))",
@@ -570,7 +584,7 @@ var tcs = []struct {
 	},
 	{
 		expr: "matrix(-2.99997*(EJ/(l*l)), 0.00000, 2.99997*(EJ/(l*l)), 2.99997*(EJ/l), 4.00000, 1.00000)/(-1*(2.99997 * (EJ / l)))",
-		out:  "matrix(0.999/l,0.000,-0.999/l,-0.999,4.000,1.000)",
+		out:  "matrix(1.000/l,0.000,-1.000/l,-1.000,4.000,1.000)",
 	},
 	{
 		expr: "2.00000*(l*l)-l*l",
@@ -578,7 +592,7 @@ var tcs = []struct {
 	},
 	{
 		expr: "L*L*det(matrix(A*E/L,0,0,0,4*E*J/L+2*P*L/15,-(6*E*J/(L*L)+P/10),0,-2*(6*E*J/(L*L)+P/10),2*(12*E*J/(L*L*L)+6*P/2/L),3,3))",
-		out:  "24.000*(A*(E*(E*(E*(J*J)))))/(L*(L*L))+(24.792*(A*(E*(E*(J*P))))/L+0.778*(A*(E*(L*(P*P)))))",
+		out:  "24.000*(A*(E*(E*(E*(J*J)))))/(L*(L*L))+(24.800*(A*(E*(E*(J*P))))/L+0.780*(A*(E*(L*(P*P)))))",
 	},
 	{
 		expr: "(72.000*(A*(E*(E*(J*(E*J)))))+1.200*(L*(L*(A*(E*(E*(J*P)))))))/(A*(E*(E*(J*(L*(L*L))))))",
@@ -602,7 +616,7 @@ var tcs = []struct {
 	},
 	{
 		expr: "integral(pow(0.5*pow(q1*x-q2*x/L+q3*x*x/L/L,2),2),x,0,L);constant(q1,q2,q3,L);variable(x);",
-		out:  "0.050*(L*(L*(L*(L*(L*(q1*(q1*(q1*q1))))))))-0.200*(L*(L*(L*(L*(q1*(q1*(q1*q2)))))))+0.300*(L*(L*(L*(q1*(q1*(q2*q2))))))-0.200*(L*(L*(q1*(q2*(q2*q2)))))+0.050*(L*(q2*(q2*(q2*q2))))+0.167*(L*(L*(L*(L*(q1*(q1*(q1*q3)))))))-0.501*(L*(L*(L*(q1*(q1*(q2*q3))))))+(0.501*(L*(L*(q1*(q2*(q2*q3)))))-0.167*(L*(q2*(q2*(q2*q3))))+(0.214*(L*(L*(L*(q1*(q1*(q3*q3))))))-0.429*(L*(L*(q1*(q2*(q3*q3))))))+(0.214*(L*(q2*(q2*(q3*q3))))+0.125*(L*(L*(q1*(q3*(q3*q3)))))-0.125*(L*(q2*(q3*(q3*q3))))+0.028*(L*(q3*(q3*(q3*q3))))))",
+		out:  "0.050*(L*(L*(L*(L*(L*(q1*(q1*(q1*q1))))))))-0.200*(L*(L*(L*(L*(q1*(q1*(q1*q2)))))))+0.300*(L*(L*(L*(q1*(q1*(q2*q2))))))-0.200*(L*(L*(q1*(q2*(q2*q2)))))+0.050*(L*(q2*(q2*(q2*q2))))+0.167*(L*(L*(L*(L*(q1*(q1*(q1*q3)))))))-0.500*(L*(L*(L*(q1*(q1*(q2*q3))))))+(0.500*(L*(L*(q1*(q2*(q2*q3)))))-0.167*(L*(q2*(q2*(q2*q3))))+(0.214*(L*(L*(L*(q1*(q1*(q3*q3))))))-0.429*(L*(L*(q1*(q2*(q3*q3))))))+(0.214*(L*(q2*(q2*(q3*q3))))+0.125*(L*(L*(q1*(q3*(q3*q3)))))-0.125*(L*(q2*(q3*(q3*q3))))+0.028*(L*(q3*(q3*(q3*q3))))))",
 	},
 	{
 		expr: "a*(b+c)",

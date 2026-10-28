@@ -364,7 +364,7 @@ func (s *sm) run() (out string, err error) {
 
 		str := astToStr(k)
 		s.base = str
-		fmt.Fprintf(s.out, "%s\n", str)
+		fmt.Fprintf(s.out, "%s\n", astToStr(roundNumbers(k)))
 		if changed {
 			for e := l.Front(); e != nil; e = e.Next() {
 				listStr := e.Value.(string)
@@ -389,7 +389,7 @@ func (s *sm) run() (out string, err error) {
 		s.iter++
 	}
 
-	out = astToStr(a)
+	out = astToStr(roundNumbers(a))
 
 	return
 }
@@ -472,6 +472,46 @@ func astToStr(e goast.Expr) string {
 	var buf bytes.Buffer
 	printer.Fprint(&buf, token.NewFileSet(), e)
 	return separateSigns(buf.String())
+}
+
+// roundNumbers returns a copy of the expression with all float numbers
+// rounded to FloatFormat decimal places. The simplification itself uses full
+// float64 precision, the rounding is applied only to what the user sees.
+func roundNumbers(e goast.Expr) goast.Expr {
+	if e == nil {
+		return nil
+	}
+	switch v := e.(type) {
+	case *goast.BasicLit:
+		if v.Kind != token.FLOAT {
+			return v
+		}
+		val, err := strconv.ParseFloat(v.Value, 64)
+		if err != nil {
+			return v
+		}
+		return &goast.BasicLit{
+			Kind:  token.FLOAT,
+			Value: fmt.Sprintf("%.*f", FloatFormat, val),
+		}
+	case *goast.BinaryExpr:
+		return &goast.BinaryExpr{
+			X:  roundNumbers(v.X),
+			Op: v.Op,
+			Y:  roundNumbers(v.Y),
+		}
+	case *goast.ParenExpr:
+		return &goast.ParenExpr{X: roundNumbers(v.X)}
+	case *goast.UnaryExpr:
+		return &goast.UnaryExpr{Op: v.Op, X: roundNumbers(v.X)}
+	case *goast.CallExpr:
+		args := make([]goast.Expr, len(v.Args))
+		for i := range v.Args {
+			args[i] = roundNumbers(v.Args[i])
+		}
+		return &goast.CallExpr{Fun: v.Fun, Args: args}
+	}
+	return e
 }
 
 // separateSigns inserts a space between two adjacent equal signs, so that
@@ -2125,19 +2165,33 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 		if s.isConstant(e) {
 			return true
 		}
-		// trigonometric of constants or numbers
+		// a name that is not the integration variable is a constant
+		// with respect to the integration, so it can be extracted,
+		// e.g. the outer variable of a nested integral
+		if id, ok := e.(*goast.Ident); ok {
+			return id.Name != astToStr(variable)
+		}
+		// trigonometric of constants or numbers,
+		// e.g. sin(q) where q is a constant.
 		if call, ok := e.(*goast.CallExpr); ok {
-			ok = false
+			id, ok := call.Fun.(*goast.Ident)
+			if !ok {
+				return false
+			}
 			for _, name := range []string{sinName, cosName, tanName} {
-				var id *goast.Ident
-				id, ok = call.Fun.(*goast.Ident)
-				if !ok {
+				if id.Name != name {
 					continue
 				}
-				if id.Name != name {
-					return true
+				for i := range call.Args {
+					if !possibleExtract(call.Args[i]) {
+						return false
+					}
 				}
+				return true
 			}
+			// any other call, for example integral(...), may depend on the
+			// integration variable and must not be extracted as a constant
+			return false
 		}
 		// number/number
 		// constants/constants
@@ -2640,17 +2694,22 @@ func (s *sm) constants(a goast.Expr) (changed bool, r goast.Expr, _ error) {
 	return true, createFloat(fmt.Sprintf("%.15e", result)), nil
 }
 
-// FloatFormat is format of float value, for more precision calculation use
-// value equal 12.
+// FloatFormat is the number of decimal places of the result.
 var FloatFormat int = 3
+
+// calcFloatDigits is the number of decimal places kept during the
+// simplification, so intermediate rounding does not spoil the result.
+const calcFloatDigits = 15
 
 func createFloat(value interface{}) *goast.BasicLit {
 	switch v := value.(type) {
 	case float64:
-		format := fmt.Sprintf("%%.%df", FloatFormat)
+		// keep full float64 precision inside the simplification process,
+		// the result is rounded to FloatFormat only for the output,
+		// see roundNumbers and run
 		return &goast.BasicLit{
 			Kind:  token.FLOAT,
-			Value: fmt.Sprintf(format, v),
+			Value: strconv.FormatFloat(v, 'f', calcFloatDigits, 64),
 		}
 	case int:
 		return createFloat(float64(v))
