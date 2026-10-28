@@ -471,7 +471,26 @@ func (s *sm) deeper(a goast.Expr, walker func(goast.Expr) (bool, goast.Expr, err
 func astToStr(e goast.Expr) string {
 	var buf bytes.Buffer
 	printer.Fprint(&buf, token.NewFileSet(), e)
-	return buf.String()
+	return separateSigns(buf.String())
+}
+
+// separateSigns inserts a space between two adjacent equal signs, so that
+// printed expression stays parseable by go/parser.
+//
+// go/printer can print a synthetic node like `a - (-1.000*b)` as `a--1.000*b`.
+// go/parser reads `--` (and `++`) as increment/decrement and fails with
+// "missing ',' in argument list", which corrupts the round trip
+// astToStr -> parser.ParseExpr used by the simplification loop.
+func separateSigns(s string) string {
+	var out strings.Builder
+	out.Grow(len(s) + 4)
+	for i := 0; i < len(s); i++ {
+		out.WriteByte(s[i])
+		if i+1 < len(s) && s[i] == s[i+1] && (s[i] == '-' || s[i] == '+') {
+			out.WriteByte(' ')
+		}
+	}
+	return out.String()
 }
 
 func (s *sm) clean(a goast.Expr) (result goast.Expr, err error) {
@@ -2312,6 +2331,22 @@ func (s *sm) integral(e goast.Expr) (changed bool, r goast.Expr, _ error) {
 }
 
 func (s *sm) mulConstToMatrix(a goast.Expr) (changed bool, r goast.Expr, _ error) {
+	// from : -matrix(...)
+	// to   : matrix(-..., rows, cols)
+	if un, ok := a.(*goast.UnaryExpr); ok && un.Op == token.SUB {
+		mt, ok := isMatrix(un.X)
+		if !ok {
+			return false, nil, nil
+		}
+		for i := range mt.Args {
+			mt.Args[i] = &goast.UnaryExpr{
+				Op: token.SUB,
+				X:  mt.Args[i],
+			}
+		}
+		return true, mt.ast(), nil
+	}
+
 	v, ok := a.(*goast.BinaryExpr)
 	if !ok {
 		return false, nil, nil

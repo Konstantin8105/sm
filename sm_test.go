@@ -241,6 +241,49 @@ var tcs = []struct {
 		expr: "matrix(5+a,4,0,-2*a,2,2)*a",
 		out:  "matrix(5.000*a+a*a,4.000*a,0.000,-2.000*(a*a),2.000,2.000)",
 	},
+	// matrix subtraction, where an element is negative value multiplied by variable,
+	// is printed by go/printer as `a--1.000*b` and used to break the astToStr -> parse loop
+	{
+		expr: "matrix(a,1,1)-matrix(-1.000*b,1,1)",
+		out:  "matrix(a+b,1.000,1.000)",
+	},
+	{
+		expr: "matrix(a,1,1)-matrix(b*(-1.000),1,1)",
+		out:  "matrix(a+b,1.000,1.000)",
+	},
+	{
+		expr: "matrix(1,2,3,4,2,2)-matrix(-1,2,-3,4,2,2)",
+		out:  "matrix(2.000,0.000,6.000,0.000,2.000,2.000)",
+	},
+	{
+		expr: "matrix(a,b,c,d,2,2)-matrix(-a,-b,-c,-d,2,2)",
+		out:  "matrix(2.000*a,2.000*b,2.000*c,2.000*d,2.000,2.000)",
+	},
+	{
+		expr: "(matrix(a,1,1)-matrix(-1.000*b,1,1))*matrix(c,1,1)",
+		out:  "matrix(a*c+b*c,1.000,1.000)",
+	},
+	// unary minus of a whole matrix is distributed into elements
+	{
+		expr: "-matrix(a,1,1)",
+		out:  "matrix(-a,1.000,1.000)",
+	},
+	{
+		expr: "-matrix(a,1,1)-matrix(b,1,1)",
+		out:  "matrix(-a-b,1.000,1.000)",
+	},
+	{
+		expr: "-matrix(-a,1,1)",
+		out:  "matrix(a,1.000,1.000)",
+	},
+	{
+		expr: "matrix(a,1,1)-(-matrix(b,1,1))",
+		out:  "matrix(a+b,1.000,1.000)",
+	},
+	{
+		expr: "-transpose(matrix(a,b,c,d,2,2))",
+		out:  "matrix(-a,-c,-b,-d,2.000,2.000)",
+	},
 	// integral
 	{
 		expr: "integral(0,x,0,1);variable(x)",
